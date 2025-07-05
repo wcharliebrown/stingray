@@ -1,5 +1,7 @@
 # Stingray API
 
+![Banana Seat](Banana_Seat.png)
+
 Stingray is a simple, fun web API written in Go. It is designed to be open source, dependency-free, and to have zero supply-chain attack surface. Perfect for learning, hacking, or deploying as a minimal, trustworthy service.
 
 ## Features
@@ -9,6 +11,11 @@ Stingray is a simple, fun web API written in Go. It is designed to be open sourc
 - 🔒 **Secure**: No supply-chain attack surface.
 - 🌐 **Web API**: Exposes a RESTful API for easy integration.
 - 👐 **Open Source**: MIT licensed, contributions welcome!
+
+## Current Status
+
+- Stability 10/10
+- Usefulness 0/10
 
 ## Getting Started
 
@@ -47,3 +54,14 @@ Contributions are welcome! Please open issues or pull requests.
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
+
+## TODOs
+
+- [ ] Add more API endpoints
+- [ ] Write unit tests
+- [ ] Improve documentation
+- [ ] Add database for saving user and route data
+- [ ] Add authentication/authorization
+- [ ] Implement rate limiting
+- [ ] Add usage examples
+- [ ] Create a demo frontend

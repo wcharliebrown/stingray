@@ -4,3 +4,12 @@ setup the main file for the project that was just created and call it stingray
 
 add code to serve web pages that are API endpoints
 
+use RESTful style API to serve json data for these pages: 
+GET user/login 
+GET page/about
+GET table/test123
+POST user/login
+
+on the GET /user/login request, add an array of form elements: username, password along with types and attributes like 'required' and 'title'
+
+a "Current Status" and TODOs to the readme
