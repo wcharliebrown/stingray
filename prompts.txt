@@ -1,0 +1,6 @@
+create a go project called stingray
+
+setup the main file for the project that was just created and call it stingray
+
+add code to serve web pages that are API endpoints
+
