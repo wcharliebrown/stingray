@@ -12,4 +12,24 @@ POST user/login
 
 on the GET /user/login request, add an array of form elements: username, password along with types and attributes like 'required' and 'title'
 
-a "Current Status" and TODOs to the readme
+add "Current Status" and TODOs to the readme
+
+create a responsive 12-col html template for an 'about' web page use {{main_content}} and {{title}} {{meta_description}} {{header}} {{sidebar}} {{navidation}} {{footer}} {{css_class}} and {{scripts}} with no dependencies
+
+add a new file database.go and include it in stingray.go The database file should initially fake the database data using static content for a 'page' table with these fields: {{title}} - Page title
+{{meta_description}} - Meta description
+{{header}} - Header content
+{{navigation}} - Navigation menu
+{{main_content}} - Main content area
+{{sidebar}} - Sidebar content
+{{footer}} - Footer content
+{{css_class}} - Custom CSS classes (commented in style section)
+{{scripts}} 
+
+Add a way to stop the daemon without using ctrl-c
+
+add a response_format to all requests. If it's missing the default is html, the only other valid value is json.
+
+add a 'template' table with an id,name, and html fields. Use the file template/default as an example. 
+Use the template table to render all pages if the response_format is 'html'
+Switch from using a database tabl;e for page templates to using files like templates/default
