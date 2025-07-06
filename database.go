@@ -1,43 +1,139 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	htmltemplate "html/template"
 	"net/http"
 	"os"
 	"path/filepath"
+	_ "github.com/go-sql-driver/mysql"
 )
+
+var db *sql.DB
 
 // Page represents a page in the database
 type Page struct {
-	Title          string `json:"title"`
-	MetaDescription string `json:"meta_description"`
-	Header         htmltemplate.HTML `json:"header"`
-	Navigation     htmltemplate.HTML `json:"navigation"`
-	MainContent    htmltemplate.HTML `json:"main_content"`
-	Sidebar        htmltemplate.HTML `json:"sidebar"`
-	Footer         htmltemplate.HTML `json:"footer"`
-	CSSClass       string `json:"css_class"`
-	Scripts        htmltemplate.HTML `json:"scripts"`
-	Template       string `json:"template"`
+	ID             int                `json:"id"`
+	Slug           string             `json:"slug"`
+	Title          string             `json:"title"`
+	MetaDescription string            `json:"meta_description"`
+	Header         htmltemplate.HTML  `json:"header"`
+	Navigation     htmltemplate.HTML  `json:"navigation"`
+	MainContent    htmltemplate.HTML  `json:"main_content"`
+	Sidebar        htmltemplate.HTML  `json:"sidebar"`
+	Footer         htmltemplate.HTML  `json:"footer"`
+	CSSClass       string             `json:"css_class"`
+	Scripts        htmltemplate.HTML  `json:"scripts"`
+	Template       string             `json:"template"`
 }
 
-// Template represents a template in the database
-type Template struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
-	HTML string `json:"html"`
+// InitDatabase initializes the MySQL database
+func InitDatabase() error {
+	var err error
+	
+	// Get database configuration
+	config := GetDatabaseConfig()
+	
+	// Open database connection
+	db, err = sql.Open("mysql", config.GetDSN())
+	if err != nil {
+		return err
+	}
+	
+	// Test the connection
+	if err = db.Ping(); err != nil {
+		return err
+	}
+	
+	// Check if the database and table exist, create if they don't
+	if err = ensureDatabaseExists(); err != nil {
+		return err
+	}
+	
+	return nil
 }
 
-// GetPageBySlug retrieves a page by its slug/identifier
-func GetPageBySlug(slug string) (*Page, bool) {
-	// Static database content
-	pages := map[string]*Page{
-		"home": {
+// ensureDatabaseExists creates the database and table if they don't exist
+func ensureDatabaseExists() error {
+	config := GetDatabaseConfig()
+	
+	// First, connect without specifying a database to create it if needed
+	tempDB, err := sql.Open("mysql", config.GetDSNWithoutDB())
+	if err != nil {
+		return err
+	}
+	defer tempDB.Close()
+	
+	// Create database if it doesn't exist
+	_, err = tempDB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci", config.Database))
+	if err != nil {
+		return err
+	}
+	
+	// Now connect to the specific database
+	db, err = sql.Open("mysql", config.GetDSN())
+	if err != nil {
+		return err
+	}
+	
+	// Test the connection
+	if err = db.Ping(); err != nil {
+		return err
+	}
+	
+	// Check if table exists
+	var tableExists int
+	err = db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '%s' AND table_name = 'pages'", config.Database)).Scan(&tableExists)
+	if err != nil {
+		return err
+	}
+	
+	// Create table if it doesn't exist
+	if tableExists == 0 {
+		if err = createPageTable(); err != nil {
+			return err
+		}
+		if err = insertInitialData(); err != nil {
+			return err
+		}
+	}
+	
+	return nil
+}
+
+// createPageTable creates the pages table
+func createPageTable() error {
+	query := `
+	CREATE TABLE pages (
+		id INT AUTO_INCREMENT PRIMARY KEY,
+		slug VARCHAR(255) UNIQUE NOT NULL,
+		title VARCHAR(255) NOT NULL,
+		meta_description TEXT,
+		header TEXT,
+		navigation TEXT,
+		main_content TEXT,
+		sidebar TEXT,
+		footer TEXT,
+		css_class VARCHAR(255),
+		scripts TEXT,
+		template VARCHAR(100) DEFAULT 'default'
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
+	
+	_, err := db.Exec(query)
+	return err
+}
+
+// insertInitialData inserts the initial page data
+func insertInitialData() error {
+	pages := []Page{
+		{
+			Slug:           "home",
 			Title:          "Welcome to Sting Ray",
 			MetaDescription: "A modern web application built with Go",
 			Header:         htmltemplate.HTML("<h1>Welcome to Sting Ray</h1>"),
-			Navigation:     htmltemplate.HTML(`<nav><a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/login">Login</a></nav>`),
+			Navigation:     htmltemplate.HTML(`<ul><li><a href="/">Home</a></li><li><a href="/page/about">About</a></li><li><a href="/user/login">Login</a></li></ul>`),
 			MainContent:    htmltemplate.HTML("<p>This is the main content area of the home page. Welcome to our application!</p>"),
 			Sidebar:        htmltemplate.HTML("<div class='sidebar'><h3>Quick Links</h3><ul><li><a href='/page/about'>About</a></li><li><a href='/user/login'>Login</a></li></ul></div>"),
 			Footer:         htmltemplate.HTML("<footer>&copy; 2024 Sting Ray. All rights reserved.</footer>"),
@@ -45,11 +141,12 @@ func GetPageBySlug(slug string) (*Page, bool) {
 			Scripts:        htmltemplate.HTML("<script>console.log('Home page loaded');</script>"),
 			Template:       "default",
 		},
-		"about": {
+		{
+			Slug:           "about",
 			Title:          "About Sting Ray",
 			MetaDescription: "Learn more about the Sting Ray application",
 			Header:         htmltemplate.HTML("<h1>About Sting Ray</h1>"),
-			Navigation:     htmltemplate.HTML(`<nav><a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/login">Login</a></nav>`),
+			Navigation:     htmltemplate.HTML(`<ul><li><a href="/">Home</a></li><li><a href="/page/about">About</a></li><li><a href="/user/login">Login</a></li></ul>`),
 			MainContent:    htmltemplate.HTML("<p>Sting Ray is a modern web application built with Go. It provides a simple and efficient way to serve web content.</p><p>Features include:</p><ul><li>Fast Go backend</li><li>JSON API endpoints</li><li>Static page serving</li><li>User authentication</li></ul>"),
 			Sidebar:        htmltemplate.HTML("<div class='sidebar'><h3>Contact</h3><p>Get in touch with us for more information.</p></div>"),
 			Footer:         htmltemplate.HTML("<footer>&copy; 2024 Sting Ray. All rights reserved.</footer>"),
@@ -57,11 +154,12 @@ func GetPageBySlug(slug string) (*Page, bool) {
 			Scripts:        htmltemplate.HTML("<script>console.log('About page loaded');</script>"),
 			Template:       "default",
 		},
-		"login": {
+		{
+			Slug:           "login",
 			Title:          "User Login",
 			MetaDescription: "Login to your Sting Ray account",
 			Header:         htmltemplate.HTML("<h1>User Login</h1>"),
-			Navigation:     htmltemplate.HTML(`<nav><a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/login">Login</a></nav>`),
+			Navigation:     htmltemplate.HTML(`<ul><li><a href="/">Home</a></li><li><a href="/page/about">About</a></li><li><a href="/user/login">Login</a></li></ul>`),
 			MainContent:    htmltemplate.HTML("<p>Please enter your credentials to access your account.</p>"),
 			Sidebar:        htmltemplate.HTML("<div class='sidebar'><h3>Need Help?</h3><p>Contact support if you're having trouble logging in.</p></div>"),
 			Footer:         htmltemplate.HTML("<footer>&copy; 2024 Sting Ray. All rights reserved.</footer>"),
@@ -69,23 +167,114 @@ func GetPageBySlug(slug string) (*Page, bool) {
 			Scripts:        htmltemplate.HTML("<script>console.log('Login page loaded');</script>"),
 			Template:       "default",
 		},
+		{
+			Slug:           "shutdown",
+			Title:          "Shutdown",
+			MetaDescription: "Server shutdown page",
+			Header:         htmltemplate.HTML("<h1>Shutdown Initiated</h1>"),
+			Navigation:     htmltemplate.HTML(`<ul><li><a href="/">Home</a></li></ul>`),
+			MainContent:    htmltemplate.HTML("<p>The server is shutting down gracefully.</p>"),
+			Sidebar:        htmltemplate.HTML("<div class='sidebar'><h3>Info</h3><p>This page will close shortly.</p></div>"),
+			Footer:         htmltemplate.HTML("<footer>&copy; 2024 Sting Ray</footer>"),
+			CSSClass:       "shutdown-page",
+			Scripts:        htmltemplate.HTML("<script>console.log('Shutdown page loaded');</script>"),
+			Template:       "simple",
+		},
 	}
+	
+	for _, page := range pages {
+		if err := insertPage(&page); err != nil {
+			return err
+		}
+	}
+	
+	return nil
+}
 
-	page, exists := pages[slug]
-	return page, exists
+// insertPage inserts a single page into the database
+func insertPage(page *Page) error {
+	query := `
+	INSERT INTO pages (slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	
+	_, err := db.Exec(query, 
+		page.Slug, 
+		page.Title, 
+		page.MetaDescription, 
+		string(page.Header), 
+		string(page.Navigation), 
+		string(page.MainContent), 
+		string(page.Sidebar), 
+		string(page.Footer), 
+		page.CSSClass, 
+		string(page.Scripts), 
+		page.Template)
+	
+	return err
+}
+
+// GetPageBySlug retrieves a page by its slug/identifier
+func GetPageBySlug(slug string) (*Page, bool) {
+	query := `SELECT id, slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template 
+			  FROM pages WHERE slug = ?`
+	
+	var page Page
+	err := db.QueryRow(query, slug).Scan(
+		&page.ID,
+		&page.Slug,
+		&page.Title,
+		&page.MetaDescription,
+		&page.Header,
+		&page.Navigation,
+		&page.MainContent,
+		&page.Sidebar,
+		&page.Footer,
+		&page.CSSClass,
+		&page.Scripts,
+		&page.Template,
+	)
+	
+	if err != nil {
+		return nil, false
+	}
+	
+	return &page, true
 }
 
 // GetAllPages returns all available pages
 func GetAllPages() map[string]*Page {
-	home, _ := GetPageBySlug("home")
-	about, _ := GetPageBySlug("about")
-	login, _ := GetPageBySlug("login")
+	query := `SELECT id, slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template 
+			  FROM pages ORDER BY slug`
 	
-	return map[string]*Page{
-		"home":  home,
-		"about": about,
-		"login": login,
+	rows, err := db.Query(query)
+	if err != nil {
+		return make(map[string]*Page)
 	}
+	defer rows.Close()
+	
+	pages := make(map[string]*Page)
+	for rows.Next() {
+		var page Page
+		err := rows.Scan(
+			&page.ID,
+			&page.Slug,
+			&page.Title,
+			&page.MetaDescription,
+			&page.Header,
+			&page.Navigation,
+			&page.MainContent,
+			&page.Sidebar,
+			&page.Footer,
+			&page.CSSClass,
+			&page.Scripts,
+			&page.Template,
+		)
+		if err == nil {
+			pages[page.Slug] = &page
+		}
+	}
+	
+	return pages
 }
 
 // loadTemplateFromFile loads a template from a file in the templates directory
@@ -98,76 +287,23 @@ func loadTemplateFromFile(name string) (string, error) {
 	return string(content), nil
 }
 
-// ReloadTemplates reloads all templates from files
-// This is useful during development for hot reloading
-func ReloadTemplates() error {
-	// This function can be called to refresh templates from disk
-	// In a production environment, you might want to add file watching
-	// or call this function periodically
-	return nil
+// templateExists checks if a template file exists
+func templateExists(name string) bool {
+	filename := filepath.Join("templates", name)
+	_, err := os.Stat(filename)
+	return err == nil
 }
 
-// GetTemplateByID retrieves a template by its ID
-func GetTemplateByID(id int) (*Template, bool) {
-	// Map IDs to template names
-	idToName := map[int]string{
-		1: "default",
-		2: "simple",
-	}
+// getAvailableTemplates returns a list of available template names
+func getAvailableTemplates() []string {
+	templates := []string{}
 	
-	name, exists := idToName[id]
-	if !exists {
-		return nil, false
-	}
+	// Check for common template files
+	commonTemplates := []string{"default", "simple"}
 	
-	html, err := loadTemplateFromFile(name)
-	if err != nil {
-		return nil, false
-	}
-	
-	return &Template{
-		ID:   id,
-		Name: name,
-		HTML: html,
-	}, true
-}
-
-// GetTemplateByName retrieves a template by its name
-func GetTemplateByName(name string) (*Template, bool) {
-	html, err := loadTemplateFromFile(name)
-	if err != nil {
-		return nil, false
-	}
-	
-	// Map names to IDs
-	nameToID := map[string]int{
-		"default": 1,
-		"simple":  2,
-	}
-	
-	id, exists := nameToID[name]
-	if !exists {
-		return nil, false
-	}
-	
-	return &Template{
-		ID:   id,
-		Name: name,
-		HTML: html,
-	}, true
-}
-
-// GetAllTemplates returns all available templates
-func GetAllTemplates() map[int]*Template {
-	templates := make(map[int]*Template)
-	
-	// Try to load each template
-	for id, name := range map[int]string{
-		1: "default",
-		2: "simple",
-	} {
-		if template, exists := GetTemplateByName(name); exists {
-			templates[id] = template
+	for _, name := range commonTemplates {
+		if templateExists(name) {
+			templates = append(templates, name)
 		}
 	}
 	
@@ -191,14 +327,20 @@ func getResponseFormat(r *http.Request) string {
 func renderHTML(w http.ResponseWriter, page *Page) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	
-	// Get the default template from the database
-	template, exists := GetTemplateByName("default")
-	if !exists {
-		http.Error(w, "Default template not found", http.StatusInternalServerError)
+	// Use the template specified in the page, or default to "default"
+	templateName := page.Template
+	if templateName == "" {
+		templateName = "default"
+	}
+	
+	// Load template from file
+	html, err := loadTemplateFromFile(templateName)
+	if err != nil {
+		http.Error(w, "Template not found", http.StatusInternalServerError)
 		return
 	}
 	
-	tmpl, err := htmltemplate.New("page").Parse(template.HTML)
+	tmpl, err := htmltemplate.New("page").Parse(html)
 	if err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 		return
@@ -215,14 +357,14 @@ func renderHTML(w http.ResponseWriter, page *Page) {
 func renderHTMLWithTemplate(w http.ResponseWriter, templateName string, data interface{}) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	
-	// Get the template from the database
-	template, exists := GetTemplateByName(templateName)
-	if !exists {
+	// Load template from file
+	html, err := loadTemplateFromFile(templateName)
+	if err != nil {
 		http.Error(w, "Template not found", http.StatusInternalServerError)
 		return
 	}
 	
-	tmpl, err := htmltemplate.New("page").Parse(template.HTML)
+	tmpl, err := htmltemplate.New("page").Parse(html)
 	if err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 		return
@@ -250,4 +392,4 @@ func HandlePageRequest(w http.ResponseWriter, r *http.Request, slug string) {
 	} else {
 		renderHTML(w, page)
 	}
-} 
+}

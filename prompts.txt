@@ -33,3 +33,6 @@ add a response_format to all requests. If it's missing the default is html, the 
 add a 'template' table with an id,name, and html fields. Use the file template/default as an example. 
 Use the template table to render all pages if the response_format is 'html'
 Switch from using a database tabl;e for page templates to using files like templates/default
+since templates are read from files, remove the Template struct and change the code to always use the filename of the template in function calls that need it
+check if a sqlite database file exists, if not, create it with the Page table
+convert this to use https://github.com/go-sql-driver/mysql instead of sqlite

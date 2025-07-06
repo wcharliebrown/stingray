@@ -7,9 +7,10 @@ Stingray is a simple, fun web API written in Go. It is designed to be open sourc
 ## Features
 
 - 🚀 **Simple**: Minimalist codebase, easy to read and extend.
-- 🦀 **No Dependencies**: Pure Go, no third-party packages.
-- 🔒 **Secure**: No supply-chain attack surface.
+- 🦀 **Go-based**: Built with Go and MySQL for reliable data storage.
+- 🔒 **Secure**: Configurable database connections with environment variables.
 - 🌐 **Web API**: Exposes a RESTful API for easy integration.
+- 🗄️ **Database**: MySQL backend with automatic schema creation.
 - 👐 **Open Source**: MIT licensed, contributions welcome!
 
 ## Current Status
@@ -21,16 +22,27 @@ Stingray is a simple, fun web API written in Go. It is designed to be open sourc
 
 ### Prerequisites
 - [Go](https://golang.org/dl/) (any recent version)
+- [MySQL](https://dev.mysql.com/downloads/) (5.7 or later)
 
 ### Build & Run
 
 ```bash
 git clone https://github.com/yourusername/stingray.git
 cd stingray
+go mod tidy
 go run .
 ```
 
 The API will start on `http://localhost:8080` by default.
+
+### Database Setup
+
+The application uses MySQL for data storage. See [MYSQL_SETUP.md](MYSQL_SETUP.md) for detailed setup instructions.
+
+**Quick Start**:
+1. Install and start MySQL server
+2. Set environment variables (optional, defaults provided)
+3. Run the application - it will automatically create the database and tables
 
 ## Usage
 
@@ -57,10 +69,10 @@ MIT License. See [LICENSE](LICENSE) for details.
 
 ## TODOs
 
+- [x] Add database for saving user and route data (MySQL)
 - [ ] Add more API endpoints
 - [ ] Write unit tests
 - [ ] Improve documentation
-- [ ] Add database for saving user and route data
 - [ ] Add authentication/authorization
 - [ ] Implement rate limiting
 - [ ] Add usage examples
