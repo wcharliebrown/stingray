@@ -26,6 +26,23 @@ func main() {
 	// Create server
 	server := NewServer(db)
 
+	// Start session cleanup routine
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour) // Clean up every hour
+		defer ticker.Stop()
+		
+		for {
+			select {
+			case <-ticker.C:
+				if err := db.CleanupExpiredSessions(); err != nil {
+					log.Printf("Session cleanup error: %v", err)
+				} else {
+					log.Println("Session cleanup completed")
+				}
+			}
+		}
+	}()
+
 	// Handle graceful shutdown
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGTERM)

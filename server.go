@@ -13,26 +13,32 @@ type Server struct {
 	server      *http.Server
 	pageHandler *handlers.PageHandler
 	authHandler *handlers.AuthHandler
+	sessionMW   *handlers.SessionMiddleware
 }
 
 func NewServer(db *database.Database) *Server {
 	mux := http.NewServeMux()
+	sessionMW := handlers.NewSessionMiddleware(db)
+	
 	server := &Server{
 		db:          db,
 		pageHandler: handlers.NewPageHandler(db),
 		authHandler: handlers.NewAuthHandler(db),
+		sessionMW:   sessionMW,
 	}
 
-	// Page routes
-	mux.HandleFunc("/", server.pageHandler.HandleHome)
-	mux.HandleFunc("/page/", server.pageHandler.HandlePage)
-	mux.HandleFunc("/pages", server.pageHandler.HandlePages)
-	mux.HandleFunc("/templates", server.pageHandler.HandleTemplates)
-	mux.HandleFunc("/template/", server.pageHandler.HandleTemplate)
+	// Page routes with optional auth middleware
+	mux.HandleFunc("/", sessionMW.OptionalAuth(server.pageHandler.HandleHome))
+	mux.HandleFunc("/page/", sessionMW.OptionalAuth(server.pageHandler.HandlePage))
+	mux.HandleFunc("/pages", sessionMW.OptionalAuth(server.pageHandler.HandlePages))
+	mux.HandleFunc("/templates", sessionMW.OptionalAuth(server.pageHandler.HandleTemplate))
+	mux.HandleFunc("/template/", sessionMW.OptionalAuth(server.pageHandler.HandleTemplate))
 	
 	// Auth routes
 	mux.HandleFunc("/user/login", server.authHandler.HandleLogin)
 	mux.HandleFunc("/user/login_post", server.authHandler.HandleLoginPost)
+	mux.HandleFunc("/user/logout", server.authHandler.HandleLogout)
+	mux.HandleFunc("/user/profile", sessionMW.RequireAuth(server.authHandler.HandleProfile))
 
 	server.server = &http.Server{
 		Addr:    ":6273",

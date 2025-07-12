@@ -42,3 +42,4 @@ implement a naming convention by renaming 'templates/footer_modern' to templates
 change all existing pages to use the 'modern' template.
 stop dropping the 'Pages' table and only create and populate it if it doesn't exist
 examine the .go files and make suggestions for separating out functionality into new .go files and possibly renaming the existing ones
+add session support using 'sessions' table and a session cookie

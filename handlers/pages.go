@@ -12,11 +12,15 @@ import (
 // PageHandler handles page-related requests
 type PageHandler struct {
 	db *database.Database
+	sm *SessionMiddleware
 }
 
 // NewPageHandler creates a new page handler
 func NewPageHandler(db *database.Database) *PageHandler {
-	return &PageHandler{db: db}
+	return &PageHandler{
+		db: db,
+		sm: NewSessionMiddleware(db),
+	}
 }
 
 // HandleHome handles the home page request
@@ -30,6 +34,19 @@ func (h *PageHandler) HandleHome(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Page not found", http.StatusNotFound)
 		return
+	}
+
+	// Modify navigation based on authentication status
+	if h.sm.IsAuthenticated(r) {
+		username := r.Header.Get("X-Username")
+		if username == "" {
+			username = "User"
+		}
+		page.Navigation = `<a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/profile">Profile</a> | <a href="/user/logout">Logout</a>`
+		page.Sidebar = `<h3>Welcome, ` + username + `!</h3><ul><li><a href="/page/about">About</a></li><li><a href="/page/demo">Demo</a></li><li><a href="/user/profile">Profile</a></li><li><a href="/user/logout">Logout</a></li></ul>`
+	} else {
+		page.Navigation = `<a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/login">Login</a>`
+		page.Sidebar = `<h3>Quick Links</h3><ul><li><a href="/page/about">About</a></li><li><a href="/page/demo">Demo</a></li><li><a href="/user/login">Login</a></li></ul>`
 	}
 
 	html, err := templates.RenderPage(page)
@@ -54,6 +71,25 @@ func (h *PageHandler) HandlePage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		RenderMessage(w, "404 Not Found", "Page Not Found", "error", "The page you requested does not exist.", "/", "Go Home", http.StatusNotFound)
 		return
+	}
+
+	// Modify navigation based on authentication status for login page
+	if path == "login" {
+		if h.sm.IsAuthenticated(r) {
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+	} else {
+		// Modify navigation for other pages based on authentication status
+		if h.sm.IsAuthenticated(r) {
+			username := r.Header.Get("X-Username")
+			if username == "" {
+				username = "User"
+			}
+			page.Navigation = `<a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/profile">Profile</a> | <a href="/user/logout">Logout</a>`
+		} else {
+			page.Navigation = `<a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/login">Login</a>`
+		}
 	}
 
 	// Check if JSON response is requested
