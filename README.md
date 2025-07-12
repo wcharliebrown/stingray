@@ -11,7 +11,7 @@ Stingray is a simple, fun web API written in Go. It is designed to be open sourc
         <td><img src="Gauge_in_red.png" alt="Pages per second" width="120"/></td>
     </tr>
     <tr>
-    <td>*Almost* No dependencies!</td>
+    <td><s>Dependencies!</s></td>
     <td>2461 Lines of Code</td>
     <td>5000 Pages/sec</td>
     </tr>
