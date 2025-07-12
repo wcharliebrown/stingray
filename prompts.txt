@@ -36,3 +36,8 @@ Switch from using a database tabl;e for page templates to using files like templ
 since templates are read from files, remove the Template struct and change the code to always use the filename of the template in function calls that need it
 check if a sqlite database file exists, if not, create it with the Page table
 convert this to use https://github.com/go-sql-driver/mysql instead of sqlite
+
+allow templates(template files) to have embedded templates like {{template_login_form}} or {{template_redesign_2025_header}}
+implement a naming convention by renaming 'templates/footer_modern' to templates/modern_footer and rename header_2025 to modern_header
+change all existing pages to use the 'modern' template.
+stop droppomg the 'Pages' table and only create and populate it if it doesn't exist

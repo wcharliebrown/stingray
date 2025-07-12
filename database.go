@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -90,7 +92,7 @@ func ensureDatabaseExists() error {
 		return err
 	}
 	
-	// Create table if it doesn't exist
+	// Create table and insert initial data only if it doesn't exist
 	if tableExists == 0 {
 		if err = createPageTable(); err != nil {
 			return err
@@ -139,7 +141,7 @@ func insertInitialData() error {
 			Footer:         htmltemplate.HTML("<footer>&copy; 2024 Sting Ray. All rights reserved.</footer>"),
 			CSSClass:       "home-page",
 			Scripts:        htmltemplate.HTML("<script>console.log('Home page loaded');</script>"),
-			Template:       "default",
+			Template:       "modern",
 		},
 		{
 			Slug:           "about",
@@ -152,7 +154,7 @@ func insertInitialData() error {
 			Footer:         htmltemplate.HTML("<footer>&copy; 2024 Sting Ray. All rights reserved.</footer>"),
 			CSSClass:       "about-page",
 			Scripts:        htmltemplate.HTML("<script>console.log('About page loaded');</script>"),
-			Template:       "default",
+			Template:       "modern",
 		},
 		{
 			Slug:           "login",
@@ -160,12 +162,12 @@ func insertInitialData() error {
 			MetaDescription: "Login to your Sting Ray account",
 			Header:         htmltemplate.HTML("<h1>User Login</h1>"),
 			Navigation:     htmltemplate.HTML(`<ul><li><a href="/">Home</a></li><li><a href="/page/about">About</a></li><li><a href="/user/login">Login</a></li></ul>`),
-			MainContent:    htmltemplate.HTML("<p>Please enter your credentials to access your account.</p>"),
+			MainContent:    htmltemplate.HTML("<p>Please enter your credentials to access your account.</p>{{template_login_form}}"),
 			Sidebar:        htmltemplate.HTML("<div class='sidebar'><h3>Need Help?</h3><p>Contact support if you're having trouble logging in.</p></div>"),
 			Footer:         htmltemplate.HTML("<footer>&copy; 2024 Sting Ray. All rights reserved.</footer>"),
 			CSSClass:       "login-page",
 			Scripts:        htmltemplate.HTML("<script>console.log('Login page loaded');</script>"),
-			Template:       "default",
+			Template:       "modern",
 		},
 		{
 			Slug:           "shutdown",
@@ -178,7 +180,20 @@ func insertInitialData() error {
 			Footer:         htmltemplate.HTML("<footer>&copy; 2024 Sting Ray</footer>"),
 			CSSClass:       "shutdown-page",
 			Scripts:        htmltemplate.HTML("<script>console.log('Shutdown page loaded');</script>"),
-			Template:       "simple",
+			Template:       "modern",
+		},
+		{
+			Slug:           "demo",
+			Title:          "Embedded Templates Demo",
+			MetaDescription: "Demonstration of embedded templates functionality",
+			Header:         htmltemplate.HTML("<h1>Embedded Templates Demo</h1>"),
+			Navigation:     htmltemplate.HTML(`<ul><li><a href="/">Home</a></li><li><a href="/page/demo">Demo</a></li></ul>`),
+			MainContent:    htmltemplate.HTML("<p>This page demonstrates the embedded templates functionality. The header and footer are embedded templates.</p><p>You can also embed forms and other components:</p>{{template_login_form}}"),
+			Sidebar:        htmltemplate.HTML("<div class='sidebar'><h3>Available Templates</h3><ul><li>modern_header</li><li>modern_footer</li><li>login_form</li></ul></div>"),
+			Footer:         htmltemplate.HTML("<footer>&copy; 2024 Sting Ray</footer>"),
+			CSSClass:       "demo-page",
+			Scripts:        htmltemplate.HTML("<script>console.log('Demo page loaded');</script>"),
+			Template:       "modern",
 		},
 	}
 	
@@ -277,6 +292,82 @@ func GetAllPages() map[string]*Page {
 	return pages
 }
 
+// processEmbeddedTemplates processes a template string and replaces embedded template references
+// like {{template_anything}} with the actual template content
+func processEmbeddedTemplates(templateContent string) (string, error) {
+	// Regular expression to find embedded template references
+	// Matches {{template_anything}} pattern
+	re := regexp.MustCompile(`\{\{template_([^}]+)\}\}`)
+	
+	// Find all matches
+	matches := re.FindAllStringSubmatch(templateContent, -1)
+	
+	// If no embedded templates found, return original content
+	if len(matches) == 0 {
+		return templateContent, nil
+	}
+	
+	// Process each embedded template
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		
+		embeddedTemplateName := match[1]
+		fullMatch := match[0]
+		
+		// Load the embedded template
+		embeddedContent, err := loadTemplateFromFile(embeddedTemplateName)
+		if err != nil {
+			// If template not found, replace with a comment indicating the missing template
+			embeddedContent = fmt.Sprintf("<!-- Missing embedded template: %s -->", embeddedTemplateName)
+		}
+		
+		// Replace the embedded template reference with its content
+		templateContent = strings.ReplaceAll(templateContent, fullMatch, embeddedContent)
+	}
+	
+	return templateContent, nil
+}
+
+// processEmbeddedTemplatesInContent processes embedded templates in page content
+// This is similar to processEmbeddedTemplates but doesn't return an error
+func processEmbeddedTemplatesInContent(content string) string {
+	// Regular expression to find embedded template references
+	// Matches {{template_anything}} pattern
+	re := regexp.MustCompile(`\{\{template_([^}]+)\}\}`)
+	
+	// Find all matches
+	matches := re.FindAllStringSubmatch(content, -1)
+	
+	// If no embedded templates found, return original content
+	if len(matches) == 0 {
+		return content
+	}
+	
+	// Process each embedded template
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		
+		embeddedTemplateName := match[1]
+		fullMatch := match[0]
+		
+		// Load the embedded template
+		embeddedContent, err := loadTemplateFromFile(embeddedTemplateName)
+		if err != nil {
+			// If template not found, replace with a comment indicating the missing template
+			embeddedContent = fmt.Sprintf("<!-- Missing embedded template: %s -->", embeddedTemplateName)
+		}
+		
+		// Replace the embedded template reference with its content
+		content = strings.ReplaceAll(content, fullMatch, embeddedContent)
+	}
+	
+	return content
+}
+
 // loadTemplateFromFile loads a template from a file in the templates directory
 func loadTemplateFromFile(name string) (string, error) {
 	filename := filepath.Join("templates", name)
@@ -284,7 +375,16 @@ func loadTemplateFromFile(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(content), nil
+	
+	templateContent := string(content)
+	
+	// Process embedded templates recursively
+	processedContent, err := processEmbeddedTemplates(templateContent)
+	if err != nil {
+		return "", err
+	}
+	
+	return processedContent, nil
 }
 
 // templateExists checks if a template file exists
@@ -299,7 +399,7 @@ func getAvailableTemplates() []string {
 	templates := []string{}
 	
 	// Check for common template files
-	commonTemplates := []string{"default", "simple"}
+	commonTemplates := []string{"default", "simple", "modern"}
 	
 	for _, name := range commonTemplates {
 		if templateExists(name) {
@@ -340,13 +440,22 @@ func renderHTML(w http.ResponseWriter, page *Page) {
 		return
 	}
 	
+	// Process embedded templates in the page content
+	processedPage := *page
+	processedPage.MainContent = htmltemplate.HTML(processEmbeddedTemplatesInContent(string(page.MainContent)))
+	processedPage.Header = htmltemplate.HTML(processEmbeddedTemplatesInContent(string(page.Header)))
+	processedPage.Navigation = htmltemplate.HTML(processEmbeddedTemplatesInContent(string(page.Navigation)))
+	processedPage.Sidebar = htmltemplate.HTML(processEmbeddedTemplatesInContent(string(page.Sidebar)))
+	processedPage.Footer = htmltemplate.HTML(processEmbeddedTemplatesInContent(string(page.Footer)))
+	processedPage.Scripts = htmltemplate.HTML(processEmbeddedTemplatesInContent(string(page.Scripts)))
+	
 	tmpl, err := htmltemplate.New("page").Parse(html)
 	if err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 		return
 	}
 	
-	err = tmpl.Execute(w, page)
+	err = tmpl.Execute(w, &processedPage)
 	if err != nil {
 		http.Error(w, "Template execution error", http.StatusInternalServerError)
 		return
