@@ -6,193 +6,77 @@
     <title>{{.Title}}</title>
     <meta name="description" content="{{.MetaDescription}}">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background-color: #f8f9fa;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 15px;
-        }
-
-        main {
-            flex: 1;
-            padding: 3rem 0;
-        }
-
-        .content-card {
-            background: white;
-            border-radius: 15px;
-            padding: 2.5rem;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            margin-bottom: 2rem;
-        }
-
-        .content-card h1 {
-            color: #2c3e50;
-            margin-bottom: 1.5rem;
-            font-size: 2.5rem;
-            font-weight: 700;
-        }
-
-        .content-card h2 {
-            color: #34495e;
-            margin-bottom: 1rem;
-            font-size: 1.8rem;
-        }
-
-        .content-card p {
-            margin-bottom: 1.5rem;
-            color: #555;
-            line-height: 1.8;
-            font-size: 1.1rem;
-        }
-
-        .btn {
-            display: inline-block;
-            padding: 0.875rem 1.75rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-            font-weight: 600;
-            border: none;
-            cursor: pointer;
-            font-size: 1rem;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 600;
-            color: #2c3e50;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 1rem;
-            border: 2px solid #e1e8ed;
-            border-radius: 8px;
-            font-size: 1rem;
-            transition: border-color 0.3s ease;
-        }
-
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .login-form {
-            max-width: 400px;
-            margin: 0 auto;
-        }
-
-        ul {
-            list-style: none;
-            padding: 0;
-        }
-
-        li {
-            padding: 0.75rem 0;
-            border-bottom: 1px solid #eee;
-        }
-
-        li:last-child {
-            border-bottom: none;
-        }
-
-        a {
-            color: #667eea;
-            text-decoration: none;
-            transition: color 0.3s ease;
-        }
-
-        a:hover {
-            color: #764ba2;
-        }
-
-        .sidebar {
-            background: white;
-            border-radius: 15px;
-            padding: 2rem;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            height: fit-content;
-        }
-
-        .sidebar h3 {
-            color: #2c3e50;
-            margin-bottom: 1rem;
-            font-size: 1.4rem;
-        }
-
-        .row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 2rem;
-        }
-
-        .col-main {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .col-sidebar {
-            flex: 0 0 300px;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        .page-wrapper { background: white; margin: 2rem auto; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; }
+        .header h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .nav { background: #f8f9fa; padding: 1rem 2rem; border-bottom: 1px solid #e9ecef; }
+        .nav a { color: #495057; text-decoration: none; margin-right: 1.5rem; font-weight: 500; }
+        .nav a:hover { color: #667eea; }
+        .main { display: grid; grid-template-columns: 1fr 300px; gap: 0; }
+        .content { padding: 2rem; background: white; }
+        .sidebar { background: #f8f9fa; padding: 2rem; border-left: 1px solid #e9ecef; }
+        .footer { background: #343a40; color: white; text-align: center; padding: 2rem; }
+        .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1rem; }
+        .col-12 { grid-column: span 12; }
+        .col-8 { grid-column: span 8; }
+        .col-4 { grid-column: span 4; }
         @media (max-width: 768px) {
-            .row {
-                flex-direction: column;
-            }
-            
-            .col-sidebar {
-                flex: none;
-            }
+            .main { grid-template-columns: 1fr; }
+            .col-8, .col-4 { grid-column: span 12; }
+            .sidebar { border-left: none; border-top: 1px solid #e9ecef; }
         }
+        h1, h2, h3 { margin-bottom: 1rem; color: #2c3e50; }
+        p { margin-bottom: 1rem; }
+        ul { margin-bottom: 1rem; padding-left: 1.5rem; }
+        li { margin-bottom: 0.5rem; }
+        a { color: #667eea; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .btn { display: inline-block; padding: 0.75rem 1.5rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 6px; text-decoration: none; font-weight: 500; transition: transform 0.2s; }
+        .btn:hover { transform: translateY(-2px); text-decoration: none; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }
+        .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+        .form-group { margin-bottom: 1.5rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 600; color: #2c3e50; }
+        .form-group input { width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 6px; font-size: 1rem; transition: border-color 0.2s; }
+        .form-group input:focus { outline: none; border-color: #667eea; }
+        .sidebar h3 { color: #667eea; }
+        .sidebar ul { list-style: none; padding-left: 0; }
+        .sidebar li { padding: 0.5rem 0; border-bottom: 1px solid #e9ecef; }
+        .sidebar li:last-child { border-bottom: none; }
     </style>
 </head>
 <body>
-    {{template_modern_header}}
-    
-    <main>
-        <div class="container">
-            <div class="row">
-                <div class="col-main">
-                    <div class="content-card">
-                        {{.MainContent}}
-                    </div>
-                </div>
-                <div class="col-sidebar">
-                    {{.Sidebar}}
-                </div>
+    <div class="page-wrapper">
+        <header class="header">
+            <div class="container">
+                <h1>{{.Header}}</h1>
             </div>
-        </div>
-    </main>
+        </header>
+        
+        <nav class="nav">
+            <div class="container">
+                {{.Navigation}}
+            </div>
+        </nav>
+        
+        <main class="main">
+            <div class="content">
+                {{.MainContent}}
+            </div>
+            <div class="sidebar">
+                {{.Sidebar}}
+            </div>
+        </main>
+        
+        <footer class="footer">
+            <div class="container">
+                {{.Footer}}
+            </div>
+        </footer>
+    </div>
     
-    {{template_modern_footer}}
+    {{.Scripts}}
 </body>
 </html> 

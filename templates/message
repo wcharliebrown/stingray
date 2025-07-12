@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <meta name="description" content="{{.MetaDescription}}">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; margin: 0; padding: 2rem; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
+        h1 { margin-bottom: 1rem; }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .info { color: #667eea; }
+        .btn { display: inline-block; padding: 0.75rem 1.5rem; background: #667eea; color: white; border-radius: 6px; text-decoration: none; font-weight: 500; margin-top: 1rem; }
+        .btn:hover { background: #764ba2; }
+        .footer { margin-top: 2rem; color: #7f8c8d; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="{{.HeaderClass}}">{{.Header}}</h1>
+        <p>{{.Message}}</p>
+        {{if .ButtonURL}}
+        <a href="{{.ButtonURL}}" class="btn">{{.ButtonText}}</a>
+        {{end}}
+        <div class="footer">{{.Footer}}</div>
+    </div>
+</body>
+</html> 

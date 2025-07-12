@@ -70,6 +70,7 @@ MIT License. See [LICENSE](LICENSE) for details.
 ## TODOs
 
 - [x] Add database for saving user and route data (MySQL)
+- [x] Allow templates to contain other templates
 - [ ] Add more API endpoints
 - [ ] Write unit tests
 - [ ] Improve documentation
