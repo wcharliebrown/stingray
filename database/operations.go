@@ -1,52 +1,9 @@
-package main
+package database
 
 import (
-	"database/sql"
 	"fmt"
-	"html/template"
-	"log"
-	"os"
-	"strings"
-
-	_ "github.com/go-sql-driver/mysql"
+	"stingray/models"
 )
-
-type Page struct {
-	ID             int
-	Slug           string
-	Title          string
-	MetaDescription string
-	Header         string
-	Navigation     string
-	MainContent    string
-	Sidebar        string
-	Footer         string
-	CSSClass       string
-	Scripts        string
-	Template       string
-}
-
-type Database struct {
-	db *sql.DB
-}
-
-func NewDatabase(dsn string) (*Database, error) {
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := db.Ping(); err != nil {
-		return nil, err
-	}
-
-	database := &Database{db: db}
-	if err := database.initDatabase(); err != nil {
-		return nil, err
-	}
-
-	return database, nil
-}
 
 func (d *Database) initDatabase() error {
 	// Create database if it doesn't exist
@@ -83,7 +40,7 @@ func (d *Database) initDatabase() error {
 }
 
 func (d *Database) initializePages() error {
-	pages := []Page{
+	pages := []models.Page{
 		{
 			Slug:           "home",
 			Title:          "Welcome to Sting Ray",
@@ -160,7 +117,7 @@ func (d *Database) initializePages() error {
 	return nil
 }
 
-func (d *Database) createPageIfNotExists(page Page) error {
+func (d *Database) createPageIfNotExists(page models.Page) error {
 	// Check if page exists
 	var count int
 	err := d.db.QueryRow("SELECT COUNT(*) FROM pages WHERE slug = ?", page.Slug).Scan(&count)
@@ -180,8 +137,8 @@ func (d *Database) createPageIfNotExists(page Page) error {
 	return nil
 }
 
-func (d *Database) GetPage(slug string) (*Page, error) {
-	var page Page
+func (d *Database) GetPage(slug string) (*models.Page, error) {
+	var page models.Page
 	err := d.db.QueryRow(`
 		SELECT id, slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template
 		FROM pages WHERE slug = ?`, slug).Scan(
@@ -194,7 +151,7 @@ func (d *Database) GetPage(slug string) (*Page, error) {
 	return &page, nil
 }
 
-func (d *Database) GetAllPages() ([]Page, error) {
+func (d *Database) GetAllPages() ([]models.Page, error) {
 	rows, err := d.db.Query(`
 		SELECT id, slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template
 		FROM pages ORDER BY slug`)
@@ -203,9 +160,9 @@ func (d *Database) GetAllPages() ([]Page, error) {
 	}
 	defer rows.Close()
 
-	var pages []Page
+	var pages []models.Page
 	for rows.Next() {
-		var page Page
+		var page models.Page
 		err := rows.Scan(
 			&page.ID, &page.Slug, &page.Title, &page.MetaDescription, &page.Header,
 			&page.Navigation, &page.MainContent, &page.Sidebar, &page.Footer,
@@ -216,90 +173,4 @@ func (d *Database) GetAllPages() ([]Page, error) {
 		pages = append(pages, page)
 	}
 	return pages, nil
-}
-
-func (d *Database) Close() error {
-	return d.db.Close()
-}
-
-// Template processing functions
-func loadTemplate(name string) (string, error) {
-	// Read template from file
-	content, err := os.ReadFile("templates/" + name)
-	if err != nil {
-		return "", fmt.Errorf("template %s not found: %v", name, err)
-	}
-	return string(content), nil
-}
-
-func processEmbeddedTemplates(content string) (string, error) {
-	// Find all template references like {{template_name}}
-	processed := content
-
-	for {
-		// Simple template replacement
-		if strings.Contains(processed, "{{template_") {
-			start := strings.Index(processed, "{{template_")
-			end := strings.Index(processed, "}}")
-			if start == -1 || end == -1 {
-				break
-			}
-
-			templateRef := processed[start+2 : end] // Remove {{ and }}
-			templateName := strings.TrimPrefix(templateRef, "template_")
-
-			templateContent, err := loadTemplate(templateName)
-			if err != nil {
-				log.Printf("Warning: Template %s not found, removing reference", templateName)
-				processed = strings.Replace(processed, processed[start:end+2], "", 1)
-			} else {
-				processed = strings.Replace(processed, processed[start:end+2], templateContent, 1)
-			}
-		} else {
-			break
-		}
-	}
-
-	return processed, nil
-}
-
-func renderPage(page *Page) (string, error) {
-	// Load the main template
-	templateContent, err := loadTemplate(page.Template)
-	if err != nil {
-		return "", err
-	}
-
-	// Process embedded templates in content
-	processedContent, err := processEmbeddedTemplates(page.MainContent)
-	if err != nil {
-		return "", err
-	}
-
-	// Create template data
-	data := map[string]interface{}{
-		"Title":          page.Title,
-		"MetaDescription": page.MetaDescription,
-		"Header":         template.HTML(page.Header),
-		"Navigation":     template.HTML(page.Navigation),
-		"MainContent":    template.HTML(processedContent),
-		"Sidebar":        template.HTML(page.Sidebar),
-		"Footer":         template.HTML(page.Footer),
-		"CSSClass":       page.CSSClass,
-		"Scripts":        template.HTML(page.Scripts),
-	}
-
-	// Parse and execute template
-	tmpl, err := template.New("page").Parse(templateContent)
-	if err != nil {
-		return "", err
-	}
-
-	var result strings.Builder
-	err = tmpl.Execute(&result, data)
-	if err != nil {
-		return "", err
-	}
-
-	return result.String(), nil
 } 

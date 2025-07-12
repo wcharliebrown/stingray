@@ -1,12 +1,15 @@
-package main
+package tests
 
 import (
 	"testing"
+	"stingray/config"
+	"stingray/database"
+	"stingray/templates"
 )
 
 func TestDatabaseConnection(t *testing.T) {
-	config := loadConfig()
-	db, err := NewDatabase(config.GetDSN())
+	cfg := config.LoadConfig()
+	db, err := database.NewDatabase(cfg.GetDSN())
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -14,8 +17,8 @@ func TestDatabaseConnection(t *testing.T) {
 }
 
 func TestGetPage(t *testing.T) {
-	config := loadConfig()
-	db, err := NewDatabase(config.GetDSN())
+	cfg := config.LoadConfig()
+	db, err := database.NewDatabase(cfg.GetDSN())
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -30,9 +33,9 @@ func TestGetPage(t *testing.T) {
 	}
 }
 
-func TestProcessEmbeddedTemplates(t *testing.T) {
+func TestProcessEmbeddedTemplatesInDatabase(t *testing.T) {
 	content := "<div>{{template_login_form}}</div>"
-	processed, err := processEmbeddedTemplates(content)
+	processed, err := templates.ProcessEmbeddedTemplates(content)
 	if err != nil {
 		t.Fatalf("Error processing embedded templates: %v", err)
 	}

@@ -40,4 +40,5 @@ convert this to use https://github.com/go-sql-driver/mysql instead of sqlite
 allow templates(template files) to have embedded templates like {{template_login_form}} or {{template_redesign_2025_header}}
 implement a naming convention by renaming 'templates/footer_modern' to templates/modern_footer and rename header_2025 to modern_header
 change all existing pages to use the 'modern' template.
-stop droppomg the 'Pages' table and only create and populate it if it doesn't exist
+stop dropping the 'Pages' table and only create and populate it if it doesn't exist
+examine the .go files and make suggestions for separating out functionality into new .go files and possibly renaming the existing ones

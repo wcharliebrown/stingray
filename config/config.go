@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ type Config struct {
 	MySQLDatabase string
 }
 
-func loadConfig() *Config {
+func LoadConfig() *Config {
 	return &Config{
 		MySQLHost:     getEnv("MYSQL_HOST", "localhost"),
 		MySQLPort:     getEnv("MYSQL_PORT", "3306"),
