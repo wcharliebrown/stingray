@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 	"stingray/database"
 	"stingray/models"
 	"time"
@@ -85,9 +86,9 @@ func (m *SessionMiddleware) RequireAuth(next http.HandlerFunc) http.HandlerFunc 
 func (m *SessionMiddleware) OptionalAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if session, err := m.GetSessionFromRequest(r); err == nil {
-			// Add session to request context or headers for template access
-			r.Header.Set("X-User-ID", session.UserID)
-			r.Header.Set("X-Username", session.Username)
+					// Add session to request context or headers for template access
+		r.Header.Set("X-User-ID", strconv.Itoa(session.UserID))
+		r.Header.Set("X-Username", session.Username)
 		}
 		next.ServeHTTP(w, r)
 	}

@@ -18,7 +18,7 @@ func TestSessionOperations(t *testing.T) {
 		session := &models.Session{
 			ID:        1,
 			SessionID: "test_session_id",
-			UserID:    "admin",
+			UserID:    1,
 			Username:  "admin",
 			CreatedAt: time.Now(),
 			ExpiresAt: time.Now().Add(24 * time.Hour),

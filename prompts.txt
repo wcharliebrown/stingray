@@ -42,4 +42,15 @@ implement a naming convention by renaming 'templates/footer_modern' to templates
 change all existing pages to use the 'modern' template.
 stop dropping the 'Pages' table and only create and populate it if it doesn't exist
 examine the .go files and make suggestions for separating out functionality into new .go files and possibly renaming the existing ones
-add session support using 'sessions' table and a session cookie
+add session support using 'sessions' table and a session cookie.
+Add a groups table.
+    Add a users table with email password and a way to link users to 0 or more groups
+    If the tables do not exist on startup, create them.
+    If the tables were created on startup add two sample users:
+    'admin' 'adminuser@servicecompany.net' in the 'admin' group
+    'customer' 'customeruser@company.com' in the 'customers' group
+    Use the new users table to authenticate logins.
+    Create an 'orders' page that only users in the admin group can see.
+    Create a FAQ page that only users in the customers table can see.
+    Add tests for all this new functionality
+    Add API routes for any new features involving users and groups.

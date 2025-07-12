@@ -7,7 +7,7 @@ import (
 type Session struct {
 	ID        int
 	SessionID string
-	UserID    string
+	UserID    int
 	Username  string
 	CreatedAt time.Time
 	ExpiresAt time.Time

@@ -67,9 +67,19 @@ func (h *AuthHandler) HandleLoginPost(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Footer = "© 2024 Sting Ray CMS"
 
-	if username == "admin" && password == "password" {
+	// Authenticate user against database
+	user, err := h.db.AuthenticateUser(username, password)
+	if err != nil {
+		data.Title = "Login Failed - Sting Ray"
+		data.MetaDescription = "Login failed"
+		data.Header = "Login Failed"
+		data.HeaderClass = "error"
+		data.Message = "Invalid username or password. Try admin/admin123 or customer/customer123."
+		data.ButtonURL = "/user/login"
+		data.ButtonText = "Try Again"
+	} else {
 		// Create session
-		session, err := h.db.CreateSession("admin", username, SessionDuration)
+		session, err := h.db.CreateSession(user.ID, user.Username, SessionDuration)
 		if err != nil {
 			data.Title = "Login Error - Sting Ray"
 			data.MetaDescription = "Login error"
@@ -86,18 +96,10 @@ func (h *AuthHandler) HandleLoginPost(w http.ResponseWriter, r *http.Request) {
 			data.MetaDescription = "Login successful"
 			data.Header = "Login Successful!"
 			data.HeaderClass = "success"
-			data.Message = "Welcome, admin! You are now logged in."
+			data.Message = "Welcome, " + user.Username + "! You are now logged in."
 			data.ButtonURL = "/"
 			data.ButtonText = "Go Home"
 		}
-	} else {
-		data.Title = "Login Failed - Sting Ray"
-		data.MetaDescription = "Login failed"
-		data.Header = "Login Failed"
-		data.HeaderClass = "error"
-		data.Message = "Invalid username or password. Try admin/password."
-		data.ButtonURL = "/user/login"
-		data.ButtonText = "Try Again"
 	}
 
 	tmplContent, err := templates.LoadTemplate("message")
@@ -147,7 +149,7 @@ func (h *AuthHandler) HandleProfile(w http.ResponseWriter, r *http.Request) {
 		ButtonText  string
 		Footer      string
 		Username    string
-		UserID      string
+		UserID      int
 		LoginTime   string
 	}
 	

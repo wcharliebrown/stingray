@@ -14,17 +14,23 @@ type Server struct {
 	pageHandler *handlers.PageHandler
 	authHandler *handlers.AuthHandler
 	sessionMW   *handlers.SessionMiddleware
+	roleMW      *handlers.RoleMiddleware
+	apiHandler  *handlers.APIHandler
 }
 
 func NewServer(db *database.Database) *Server {
 	mux := http.NewServeMux()
 	sessionMW := handlers.NewSessionMiddleware(db)
+	roleMW := handlers.NewRoleMiddleware(db)
+	apiHandler := handlers.NewAPIHandler(db)
 	
 	server := &Server{
 		db:          db,
 		pageHandler: handlers.NewPageHandler(db),
 		authHandler: handlers.NewAuthHandler(db),
 		sessionMW:   sessionMW,
+		roleMW:      roleMW,
+		apiHandler:  apiHandler,
 	}
 
 	// Page routes with optional auth middleware
@@ -39,6 +45,16 @@ func NewServer(db *database.Database) *Server {
 	mux.HandleFunc("/user/login_post", server.authHandler.HandleLoginPost)
 	mux.HandleFunc("/user/logout", server.authHandler.HandleLogout)
 	mux.HandleFunc("/user/profile", sessionMW.RequireAuth(server.authHandler.HandleProfile))
+
+	// Role-based page routes
+	mux.HandleFunc("/page/orders", roleMW.RequireAdmin(server.pageHandler.HandlePage))
+	mux.HandleFunc("/page/faq", roleMW.RequireCustomer(server.pageHandler.HandlePage))
+
+	// API routes
+	mux.HandleFunc("/api/users", apiHandler.HandleGetUsers)
+	mux.HandleFunc("/api/groups", apiHandler.HandleGetGroups)
+	mux.HandleFunc("/api/user-groups", apiHandler.HandleGetUserGroups)
+	mux.HandleFunc("/api/current-user", apiHandler.HandleGetCurrentUser)
 
 	server.server = &http.Server{
 		Addr:    ":6273",
