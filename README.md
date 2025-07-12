@@ -4,7 +4,7 @@
 
 Stingray is a simple, fun web API written in Go. It is designed to be open source, dependency-free, and to have zero supply-chain attack surface. Perfect for learning, hacking, or deploying as a minimal, trustworthy service.
 
-![Green Gauge](Gauge_in_green.png)
+<img src="Gauge_in_green.png" alt="Green Gauge" width="120"/>
 *Almost* No dependencies!
 
 ![Green Gauge](Gauge_in_green.png)
