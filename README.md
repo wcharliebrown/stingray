@@ -6,9 +6,9 @@ Stingray is a simple, fun web API written in Go. It is designed to be open sourc
 
 <table>
     <tr>
-        <td><img src="Gauge_in_green.png" alt="No dependencies" width="120"/></td>
-        <td><img src="Gauge_in_green.png" alt="Lines of Code" width="120"/></td>
-        <td><img src="Gauge_in_red.png" alt="Pages per second" width="120"/></td>
+        <td><img src="Gauge_in_green.png" alt="No dependencies" width="200"/></td>
+        <td><img src="Gauge_in_green.png" alt="Lines of Code" width="200"/></td>
+        <td><img src="Gauge_in_red.png" alt="Pages per second" width="200"/></td>
     </tr>
     <tr>
     <td><s>Dependencies!</s></td>
