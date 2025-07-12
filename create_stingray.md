@@ -6,7 +6,7 @@ Create a modern web application called "Sting Ray" built with Go that serves as 
 ## Core Architecture
 
 ### Technology Stack
-- **Backend**: Go 1.24.4
+- **Backend**: Go 1.24
 - **Database**: MySQL 5.7+
 - **Templates**: HTML templates with embedded template support
 - **Server**: HTTP server running on port 6273 (0x6273 in hex = 'bs')
@@ -17,18 +17,38 @@ Create a modern web application called "Sting Ray" built with Go that serves as 
 stingray/
 ├── go.mod
 ├── go.sum
-├── stingray.go          # Main application entry point
-├── config.go            # Database configuration
-├── database.go          # Database operations and page management
+├── main.go              # Main application entry point
+├── server.go            # HTTP server setup and routing
+├── config/
+│   └── config.go        # Database configuration
+├── database/
+│   ├── connection.go     # Database connection management
+│   └── operations.go     # Database operations and page management
+├── handlers/
+│   ├── auth.go          # Authentication handlers
+│   ├── pages.go         # Page management handlers
+│   └── common.go        # Common handler utilities
+├── models/
+│   └── page.go          # Page data model
 ├── templates/           # HTML template files
-│   ├── default          # Default template (324 lines)
-│   ├── simple           # Simple template (128 lines)
-│   ├── modern           # Modern template (198 lines)
-│   ├── modern_header    # Header component (84 lines)
-│   ├── modern_footer    # Footer component (98 lines)
-│   └── login_form       # Login form component (13 lines)
+│   ├── default          # Default template (76 lines)
+│   ├── simple           # Simple template (34 lines)
+│   ├── modern           # Modern template (82 lines)
+│   ├── modern_header    # Header component (5 lines)
+│   ├── modern_footer    # Footer component (5 lines)
+│   ├── login_form       # Login form component (13 lines)
+│   ├── message          # Message template (30 lines)
+│   └── renderer.go      # Template rendering utilities
+├── tests/
+│   ├── database_test.go # Database tests
+│   └── template_test.go # Template tests
 ├── env.example          # Environment variables example
-├── .gitignore           # Git ignore file
+├── Makefile             # Build and run commands
+├── CLI_TESTS_README.md  # CLI testing documentation
+├── MYSQL_SETUP.md       # MySQL setup instructions
+├── quick_test_pages.sh  # Quick test script
+├── test_pages_endpoint.sh # Page endpoint tests
+├── prompts.txt          # Development prompts
 └── README.md            # Project documentation
 ```
 
@@ -71,7 +91,7 @@ The application should automatically populate the database with these pages:
 - Server runs on port 6273
 - Graceful shutdown with 30-second timeout
 - Signal handling for SIGINT and SIGTERM
-- POST `/shutdown` endpoint to trigger shutdown
+- Modular server structure with separate handlers
 
 ### 2. Page Management System
 - Dynamic page serving from database
@@ -99,17 +119,19 @@ The application should automatically populate the database with these pages:
 The application supports multiple HTML templates with embedded template functionality:
 
 #### Template Files Required
-1. **default** (324 lines) - Full-featured template with header, navigation, main content, sidebar, footer
-2. **simple** (128 lines) - Minimal template for simple pages
-3. **modern** (198 lines) - Modern design with embedded header/footer
-4. **modern_header** (84 lines) - Header component
-5. **modern_footer** (98 lines) - Footer component
+1. **default** (76 lines) - Full-featured template with header, navigation, main content, sidebar, footer
+2. **simple** (34 lines) - Minimal template for simple pages
+3. **modern** (82 lines) - Modern design with embedded header/footer
+4. **modern_header** (5 lines) - Header component
+5. **modern_footer** (5 lines) - Footer component
 6. **login_form** (13 lines) - Login form component
+7. **message** (30 lines) - Message template for notifications
 
 #### Embedded Template System
 - Support for `{{template_name}}` syntax in content
 - Recursive template processing
 - Graceful handling of missing templates
+- Template renderer utilities in `templates/renderer.go`
 
 ### 5. Configuration Management
 Environment variables with defaults:
@@ -121,22 +143,37 @@ Environment variables with defaults:
 
 ## Implementation Details
 
-### Database Operations (database.go)
+### Modular Architecture
+
+#### Database Layer (`database/`)
+- **connection.go**: Database connection management and initialization
+- **operations.go**: Page CRUD operations, template loading, and embedded template resolution
+
+#### Configuration (`config/`)
+- **config.go**: Environment variable parsing, MySQL DSN generation, and default value handling
+
+#### Handlers (`handlers/`)
+- **pages.go**: Page management handlers (218 lines)
+- **auth.go**: Authentication handlers (90 lines)
+- **common.go**: Common handler utilities (43 lines)
+
+#### Models (`models/`)
+- **page.go**: Page data model structure
+
+#### Templates (`templates/`)
+- **renderer.go**: Template rendering utilities (99 lines)
+- Various HTML template files for different page layouts
+
+### Main Application Structure
+- **main.go**: Application entry point with graceful shutdown
+- **server.go**: HTTP server setup, routing, and lifecycle management
+
+### Database Operations
 - Automatic database and table creation
 - Page CRUD operations
 - Template loading and processing
 - Embedded template resolution
 - Response format handling (HTML/JSON)
-
-### Configuration (config.go)
-- Environment variable parsing
-- MySQL DSN generation
-- Default value handling
-
-### Main Application (stingray.go)
-- HTTP route definitions
-- Graceful shutdown implementation
-- Server lifecycle management
 
 ### Template System
 - File-based template loading
@@ -164,12 +201,17 @@ Environment variables with defaults:
 ## Development Requirements
 
 ### Prerequisites
-- Go 1.24.4 or later
+- Go 1.24 or later
 - MySQL 5.7 or later
 - Git for version control
 
 ### Build and Run
 ```bash
+# Using Makefile
+make build
+make run
+
+# Or directly with Go
 go mod tidy
 go run .
 ```
@@ -179,13 +221,30 @@ go run .
 - Environment variables configured (optional, defaults provided)
 - Automatic database creation on first run
 
+## Testing and Development Tools
+
+### Testing
+- **tests/database_test.go**: Database operation tests
+- **tests/template_test.go**: Template rendering tests
+- Run tests with: `make test` or `go test ./...`
+
+### Development Scripts
+- **quick_test_pages.sh**: Quick page testing script
+- **test_pages_endpoint.sh**: Comprehensive page endpoint testing
+- **CLI_TESTS_README.md**: Command-line testing documentation
+
+### Documentation
+- **MYSQL_SETUP.md**: MySQL database setup instructions
+- **prompts.txt**: Development prompts and guidelines
+
 ## Key Implementation Notes
 
 1. **Error Handling**: Graceful error handling with appropriate HTTP status codes
 2. **Security**: Input validation and SQL injection prevention
 3. **Performance**: Efficient database queries and template caching
-4. **Maintainability**: Clean code structure with separation of concerns
+4. **Maintainability**: Clean modular code structure with separation of concerns
 5. **Extensibility**: Easy to add new pages, templates, and endpoints
+6. **Testing**: Comprehensive test suite with database and template tests
 
 ## Testing and Validation
 
@@ -195,5 +254,6 @@ The application should support:
 - Template system validation
 - Database connectivity testing
 - Graceful shutdown testing
+- Automated testing with provided test scripts
 
-This comprehensive prompt provides all the necessary details to recreate the Sting Ray web application with its full functionality, including the database schema, template system, API endpoints, and modern web design. 
+This comprehensive prompt provides all the necessary details to recreate the Sting Ray web application with its full functionality, including the modular architecture, database schema, template system, API endpoints, and modern web design. 
