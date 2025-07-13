@@ -2722,3 +2722,48 @@ func (d *Database) migrateAddPermissionFields() error {
 
 	return nil
 }
+
+// DeleteTableMetadata deletes table metadata and all related field metadata
+func (d *Database) DeleteTableMetadata(tableName string) error {
+	// Start a transaction
+	tx, err := d.Begin()
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	defer tx.Rollback()
+
+	// Delete all field metadata for this table
+	_, err = tx.Exec("DELETE FROM _field_metadata WHERE table_name = ?", tableName)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Delete table metadata
+	_, err = tx.Exec("DELETE FROM _table_metadata WHERE table_name = ?", tableName)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Drop the actual table
+	_, err = tx.Exec("DROP TABLE IF EXISTS `" + tableName + "`")
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Commit the transaction
+	return tx.Commit()
+}
+
+// DeleteFieldMetadata deletes metadata for a specific field
+func (d *Database) DeleteFieldMetadata(tableName, fieldName string) error {
+	_, err := d.Exec("DELETE FROM _field_metadata WHERE table_name = ? AND field_name = ?", tableName, fieldName)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	return nil
+}

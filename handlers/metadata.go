@@ -38,13 +38,14 @@ func (h *MetadataHandler) HandleTableList(w http.ResponseWriter, r *http.Request
 	// Check if user is authenticated
 	isAuthenticated := h.sm.IsAuthenticated(r)
 	var userID int
-	var isEngineer bool
+	var isEngineer, isAdmin bool
 	if isAuthenticated {
 		session, err := h.sm.GetSessionFromRequest(r)
 		if err == nil {
 			userID = session.UserID
-			// Check if user is in engineer group
+			// Check if user is in engineer or admin group
 			isEngineer, _ = h.db.IsUserInGroup(userID, "engineer")
+			isAdmin, _ = h.db.IsUserInGroup(userID, "admin")
 		}
 	}
 
@@ -179,7 +180,10 @@ func (h *MetadataHandler) HandleTableList(w http.ResponseWriter, r *http.Request
 					</div>
 					<div class="table-actions">
 						<a href="/metadata/table/{{.TableName}}" class="btn btn-primary">View Data</a>
-						<a href="/metadata/edit/{{.TableName}}" class="btn btn-secondary">Edit</a>
+						{{if or $.IsEngineer $.IsAdmin $.EngineerMode}}
+						<a href="/metadata/edit-table/{{.TableName}}" class="btn btn-secondary">Edit Metadata</a>
+						<a href="/metadata/delete-table/{{.TableName}}" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this table? This will permanently remove the table, its metadata, and all field metadata. This action cannot be undone.')">Delete</a>
+						{{end}}
 					</div>
 				</li>
 				{{end}}
@@ -197,6 +201,7 @@ func (h *MetadataHandler) HandleTableList(w http.ResponseWriter, r *http.Request
 	data := map[string]interface{}{
 		"Tables":       accessibleTables,
 		"IsEngineer":   isEngineer,
+		"IsAdmin":      isAdmin,
 		"EngineerMode": engineerMode,
 	}
 
@@ -787,4 +792,210 @@ func (h *MetadataHandler) HandleDeleteRow(w http.ResponseWriter, r *http.Request
 
 	// Redirect back to table view
 	http.Redirect(w, r, fmt.Sprintf("/metadata/table/%s", tableName), http.StatusSeeOther)
+} 
+
+// HandleEditTableMetadata handles editing table metadata
+func (h *MetadataHandler) HandleEditTableMetadata(w http.ResponseWriter, r *http.Request) {
+	// Check if user is authenticated
+	if !h.sm.IsAuthenticated(r) {
+		http.Redirect(w, r, "/user/login", http.StatusSeeOther)
+		return
+	}
+
+	// Extract table name from URL
+	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/metadata/edit-table/"), "/")
+	if len(pathParts) == 0 {
+		http.Error(w, "Table name required", http.StatusBadRequest)
+		return
+	}
+	tableName := pathParts[0]
+
+	// Get table metadata
+	tableMetadata, err := h.db.GetTableMetadata(tableName)
+	if err != nil {
+		database.LogSQLError(err)
+		http.Error(w, "Table not found", http.StatusNotFound)
+		return
+	}
+
+	// Check user permissions - only admin and engineer can edit table metadata
+	session, err := h.sm.GetSessionFromRequest(r)
+	if err != nil {
+		http.Error(w, "User not authenticated", http.StatusUnauthorized)
+		return
+	}
+	userID := session.UserID
+
+	isAdmin, _ := h.db.IsUserInGroup(userID, "admin")
+	isEngineer, _ := h.db.IsUserInGroup(userID, "engineer")
+
+	if !isAdmin && !isEngineer {
+		http.Error(w, "Access denied", http.StatusForbidden)
+		return
+	}
+
+	// Handle form submission
+	if r.Method == "POST" {
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Error parsing form", http.StatusBadRequest)
+			return
+		}
+
+		// Update table metadata
+		tableMetadata.DisplayName = r.FormValue("display_name")
+		tableMetadata.Description = r.FormValue("description")
+		tableMetadata.ReadGroups = r.FormValue("read_groups")
+		tableMetadata.WriteGroups = r.FormValue("write_groups")
+
+		if err := h.db.UpdateTableMetadata(tableMetadata); err != nil {
+			database.LogSQLError(err)
+			http.Error(w, "Error updating table metadata", http.StatusInternalServerError)
+			return
+		}
+
+		// Redirect back to tables list
+		http.Redirect(w, r, "/metadata/tables", http.StatusSeeOther)
+		return
+	}
+
+	// Check if JSON response is requested
+	if r.URL.Query().Get("response_format") == "json" {
+		response := map[string]interface{}{
+			"table_name":   tableName,
+			"metadata":     tableMetadata,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// HTML response
+	tmpl := `
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Edit {{.DisplayName}} - Sting Ray</title>
+		<style>
+			body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; margin: 0; padding: 2rem; }
+			.container { max-width: 800px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+			h1 { color: #2c3e50; margin-bottom: 1rem; }
+			.form-group { margin-bottom: 1rem; }
+			label { display: block; margin-bottom: 0.5rem; font-weight: 600; }
+			input, textarea { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; }
+			textarea { min-height: 100px; }
+			.btn { padding: 0.75rem 1.5rem; border: none; border-radius: 4px; text-decoration: none; font-size: 1rem; cursor: pointer; margin-right: 0.5rem; }
+			.btn-primary { background: #667eea; color: white; }
+			.btn-secondary { background: #6c757d; color: white; }
+			.btn-danger { background: #dc3545; color: white; }
+			.btn:hover { opacity: 0.8; }
+			.help-text { font-size: 0.9rem; color: #6c757d; margin-top: 0.25rem; }
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<h1>Edit {{.DisplayName}}</h1>
+			<form method="POST">
+				<div class="form-group">
+					<label for="table_name">Table Name</label>
+					<input type="text" id="table_name" value="{{.TableName}}" readonly>
+					<div class="help-text">Table name cannot be changed</div>
+				</div>
+				<div class="form-group">
+					<label for="display_name">Display Name</label>
+					<input type="text" name="display_name" id="display_name" value="{{.DisplayName}}" required>
+				</div>
+				<div class="form-group">
+					<label for="description">Description</label>
+					<textarea name="description" id="description">{{.Description}}</textarea>
+				</div>
+				<div class="form-group">
+					<label for="read_groups">Read Groups (JSON array)</label>
+					<textarea name="read_groups" id="read_groups">{{.ReadGroups}}</textarea>
+					<div class="help-text">Example: ["admin", "engineer", "everyone"]</div>
+				</div>
+				<div class="form-group">
+					<label for="write_groups">Write Groups (JSON array)</label>
+					<textarea name="write_groups" id="write_groups">{{.WriteGroups}}</textarea>
+					<div class="help-text">Example: ["admin", "engineer"]</div>
+				</div>
+				<div class="form-group">
+					<button type="submit" class="btn btn-primary">Update Metadata</button>
+					<a href="/metadata/tables" class="btn btn-secondary">Cancel</a>
+					<a href="/metadata/delete-table/{{.TableName}}" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this table? This will permanently remove the table, its metadata, and all field metadata. This action cannot be undone.')">Delete Table</a>
+				</div>
+			</form>
+		</div>
+	</body>
+	</html>`
+
+	t, err := template.New("edit_table_metadata").Parse(tmpl)
+	if err != nil {
+		http.Error(w, "Error parsing template", http.StatusInternalServerError)
+		return
+	}
+
+	data := map[string]interface{}{
+		"TableName":   tableName,
+		"DisplayName": tableMetadata.DisplayName,
+		"Description": tableMetadata.Description,
+		"ReadGroups":  tableMetadata.ReadGroups,
+		"WriteGroups": tableMetadata.WriteGroups,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	t.Execute(w, data)
+}
+
+// HandleDeleteTable handles deleting a table and all its metadata
+func (h *MetadataHandler) HandleDeleteTable(w http.ResponseWriter, r *http.Request) {
+	// Check if user is authenticated
+	if !h.sm.IsAuthenticated(r) {
+		http.Redirect(w, r, "/user/login", http.StatusSeeOther)
+		return
+	}
+
+	// Extract table name from URL
+	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/metadata/delete-table/"), "/")
+	if len(pathParts) == 0 {
+		http.Error(w, "Table name required", http.StatusBadRequest)
+		return
+	}
+	tableName := pathParts[0]
+
+	// Check user permissions - only admin and engineer can delete tables
+	session, err := h.sm.GetSessionFromRequest(r)
+	if err != nil {
+		http.Error(w, "User not authenticated", http.StatusUnauthorized)
+		return
+	}
+	userID := session.UserID
+
+	isAdmin, _ := h.db.IsUserInGroup(userID, "admin")
+	isEngineer, _ := h.db.IsUserInGroup(userID, "engineer")
+
+	if !isAdmin && !isEngineer {
+		http.Error(w, "Access denied", http.StatusForbidden)
+		return
+	}
+
+	// Prevent deletion of system tables
+	systemTables := []string{"_user", "_group", "_user_and_group", "_session", "_table_metadata", "_field_metadata", "_page"}
+	for _, sysTable := range systemTables {
+		if tableName == sysTable {
+			http.Error(w, "Cannot delete system tables", http.StatusForbidden)
+			return
+		}
+	}
+
+	// Delete the table and all its metadata
+	if err := h.db.DeleteTableMetadata(tableName); err != nil {
+		database.LogSQLError(err)
+		http.Error(w, "Error deleting table", http.StatusInternalServerError)
+		return
+	}
+
+	// Redirect back to tables list
+	http.Redirect(w, r, "/metadata/tables", http.StatusSeeOther)
 } 

@@ -63,6 +63,8 @@ func NewServer(db *database.Database) *Server {
 	mux.HandleFunc("/metadata/table/", server.metadataHandler.HandleTableData)
 	mux.HandleFunc("/metadata/edit/", sessionMW.RequireAuth(server.metadataHandler.HandleEditRow))
 	mux.HandleFunc("/metadata/delete/", sessionMW.RequireAuth(server.metadataHandler.HandleDeleteRow))
+	mux.HandleFunc("/metadata/edit-table/", sessionMW.RequireAuth(server.metadataHandler.HandleEditTableMetadata))
+	mux.HandleFunc("/metadata/delete-table/", sessionMW.RequireAuth(server.metadataHandler.HandleDeleteTable))
 
 	server.server = &http.Server{
 		Addr:    ":6273",
