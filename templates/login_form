@@ -10,4 +10,7 @@
         </div>
         <button type="submit" class="btn">Login</button>
     </form>
+    <div style="margin-top: 15px; text-align: center;">
+        <a href="/user/password-reset-request" style="color: #007cba; text-decoration: none;">Forgot Password?</a>
+    </div>
 </div> 

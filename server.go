@@ -4,68 +4,84 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"stingray/config"
 	"stingray/database"
 	"stingray/handlers"
+	"stingray/logging"
 )
 
 type Server struct {
 	db          *database.Database
+	cfg         *config.Config
+	logger      *logging.Logger
 	server      *http.Server
 	pageHandler *handlers.PageHandler
 	authHandler *handlers.AuthHandler
 	sessionMW   *handlers.SessionMiddleware
 	roleMW      *handlers.RoleMiddleware
+	loggingMW   *handlers.LoggingMiddleware
 	apiHandler  *handlers.APIHandler
 	metadataHandler *handlers.MetadataHandler
+	passwordResetHandler *handlers.PasswordResetHandler
 }
 
-func NewServer(db *database.Database) *Server {
+func NewServer(db *database.Database, cfg *config.Config) *Server {
 	mux := http.NewServeMux()
+	logger := logging.NewLogger(cfg.LoggingLevel)
 	sessionMW := handlers.NewSessionMiddleware(db)
 	roleMW := handlers.NewRoleMiddleware(db)
+	loggingMW := handlers.NewLoggingMiddleware(logger)
 	apiHandler := handlers.NewAPIHandler(db)
 	
 	server := &Server{
 		db:          db,
+		cfg:         cfg,
+		logger:      logger,
 		pageHandler: handlers.NewPageHandler(db),
-		authHandler: handlers.NewAuthHandler(db),
+		authHandler: handlers.NewAuthHandler(db, logger),
 		sessionMW:   sessionMW,
 		roleMW:      roleMW,
+		loggingMW:   loggingMW,
 		apiHandler:  apiHandler,
 		metadataHandler: handlers.NewMetadataHandler(db),
+		passwordResetHandler: handlers.NewPasswordResetHandler(db, cfg),
 	}
 
 	// Page routes with optional auth middleware
-	mux.HandleFunc("/", sessionMW.OptionalAuth(server.pageHandler.HandleHome))
-	mux.HandleFunc("/page/", sessionMW.OptionalAuth(server.pageHandler.HandlePage))
-	mux.HandleFunc("/pages", sessionMW.OptionalAuth(server.pageHandler.HandlePages))
-	mux.HandleFunc("/templates", sessionMW.OptionalAuth(server.pageHandler.HandleTemplate))
-	mux.HandleFunc("/template/", sessionMW.OptionalAuth(server.pageHandler.HandleTemplate))
+	mux.HandleFunc("/", loggingMW.Wrap(sessionMW.OptionalAuth(server.pageHandler.HandleHome)))
+	mux.HandleFunc("/page/", loggingMW.Wrap(sessionMW.OptionalAuth(server.pageHandler.HandlePage)))
+	mux.HandleFunc("/pages", loggingMW.Wrap(sessionMW.OptionalAuth(server.pageHandler.HandlePages)))
+	mux.HandleFunc("/templates", loggingMW.Wrap(sessionMW.OptionalAuth(server.pageHandler.HandleTemplate)))
+	mux.HandleFunc("/template/", loggingMW.Wrap(sessionMW.OptionalAuth(server.pageHandler.HandleTemplate)))
 	
 	// Auth routes
-	mux.HandleFunc("/user/login", server.authHandler.HandleLogin)
-	mux.HandleFunc("/user/login_post", server.authHandler.HandleLoginPost)
-	mux.HandleFunc("/user/logout", server.authHandler.HandleLogout)
-	mux.HandleFunc("/user/profile", sessionMW.RequireAuth(server.authHandler.HandleProfile))
+	mux.HandleFunc("/user/login", loggingMW.Wrap(server.authHandler.HandleLogin))
+	mux.HandleFunc("/user/login_post", loggingMW.Wrap(server.authHandler.HandleLoginPost))
+	mux.HandleFunc("/user/logout", loggingMW.Wrap(server.authHandler.HandleLogout))
+	mux.HandleFunc("/user/profile", loggingMW.Wrap(sessionMW.RequireAuth(server.authHandler.HandleProfile)))
+
+	// Password reset routes
+	mux.HandleFunc("/user/password-reset-request", loggingMW.Wrap(server.passwordResetHandler.HandlePasswordResetRequest))
+	mux.HandleFunc("/user/password-reset-confirm", loggingMW.Wrap(server.passwordResetHandler.HandlePasswordResetConfirm))
 
 	// Role-based page routes
-	mux.HandleFunc("/page/orders", roleMW.RequireAdmin(server.pageHandler.HandlePage))
-	mux.HandleFunc("/page/faq", roleMW.RequireCustomer(server.pageHandler.HandlePage))
+	mux.HandleFunc("/page/orders", loggingMW.Wrap(roleMW.RequireAdmin(server.pageHandler.HandlePage)))
+	mux.HandleFunc("/page/faq", loggingMW.Wrap(roleMW.RequireCustomer(server.pageHandler.HandlePage)))
 
 	// API routes
-	mux.HandleFunc("/api/users", apiHandler.HandleGetUsers)
-	mux.HandleFunc("/api/groups", apiHandler.HandleGetGroups)
-	mux.HandleFunc("/api/user-groups", apiHandler.HandleGetUserGroups)
-	mux.HandleFunc("/api/current-user", apiHandler.HandleGetCurrentUser)
+	mux.HandleFunc("/api/users", loggingMW.Wrap(apiHandler.HandleGetUsers))
+	mux.HandleFunc("/api/groups", loggingMW.Wrap(apiHandler.HandleGetGroups))
+	mux.HandleFunc("/api/user-groups", loggingMW.Wrap(apiHandler.HandleGetUserGroups))
+	mux.HandleFunc("/api/current-user", loggingMW.Wrap(apiHandler.HandleGetCurrentUser))
 
 	// Metadata routes
-	mux.HandleFunc("/metadata/tables", server.metadataHandler.HandleTableList)
-	mux.HandleFunc("/metadata/table/", server.metadataHandler.HandleTableData)
-	mux.HandleFunc("/metadata/edit/", sessionMW.RequireAuth(server.metadataHandler.HandleEditRow))
-	mux.HandleFunc("/metadata/delete/", sessionMW.RequireAuth(server.metadataHandler.HandleDeleteRow))
-	mux.HandleFunc("/metadata/edit-table/", sessionMW.RequireAuth(server.metadataHandler.HandleEditTableMetadata))
-	mux.HandleFunc("/metadata/delete-table/", sessionMW.RequireAuth(server.metadataHandler.HandleDeleteTable))
-	mux.HandleFunc("/metadata/create-table", sessionMW.RequireAuth(server.metadataHandler.HandleCreateTable))
+	mux.HandleFunc("/metadata/tables", loggingMW.Wrap(server.metadataHandler.HandleTableList))
+	mux.HandleFunc("/metadata/table/", loggingMW.Wrap(server.metadataHandler.HandleTableData))
+	mux.HandleFunc("/metadata/edit/", loggingMW.Wrap(sessionMW.RequireAuth(server.metadataHandler.HandleEditRow)))
+	mux.HandleFunc("/metadata/delete/", loggingMW.Wrap(sessionMW.RequireAuth(server.metadataHandler.HandleDeleteRow)))
+	mux.HandleFunc("/metadata/edit-table/", loggingMW.Wrap(sessionMW.RequireAuth(server.metadataHandler.HandleEditTableMetadata)))
+	mux.HandleFunc("/metadata/delete-table/", loggingMW.Wrap(sessionMW.RequireAuth(server.metadataHandler.HandleDeleteTable)))
+	mux.HandleFunc("/metadata/create-table", loggingMW.Wrap(sessionMW.RequireAuth(server.metadataHandler.HandleCreateTable)))
 
 	server.server = &http.Server{
 		Addr:    ":6273",
@@ -76,11 +92,13 @@ func NewServer(db *database.Database) *Server {
 }
 
 func (s *Server) Start() error {
+	s.logger.LogVerbose("Starting Sting Ray server on port 6273...")
 	log.Printf("Starting Sting Ray server on port 6273...")
 	return s.server.ListenAndServe()
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	s.logger.LogVerbose("Shutting down server gracefully...")
 	log.Println("Shutting down server gracefully...")
 	return s.server.Shutdown(ctx)
 } 

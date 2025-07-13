@@ -12,7 +12,7 @@ Stingray is a simple, fun web API written in Go. It is designed to be open sourc
     </tr>
     <tr>
     <td>Only 1 Dependency</td>
-    <td>4550 Lines of Code</td>
+    <td>7870 Lines of Code</td>
     <td>5000 Pages/sec</td>
     </tr>
 </table>
@@ -35,12 +35,13 @@ Stingray is a simple, fun web API written in Go. It is designed to be open sourc
 - ⚙️ **Configuration**: Environment-based configuration management.
 - 🧪 **Testing**: Comprehensive test suite included.
 - 🔐 **Secure Password Hashing**: Argon2id password hashing with automatic migration.
+- 🔑 **Password Reset**: Secure password reset functionality with email-based tokens.
 - 📝 **Configurable Forms**: Dynamic form generation with field metadata and engineer mode.
 
 ## Current Status
 
 - Stability 10/10
-- Usefulness 4/10
+- Usefulness 5/10
 
 ## Getting Started
 
@@ -120,6 +121,10 @@ Visit `http://localhost:6273` to access the web interface. The system includes:
 - `POST /user/login_post` - Process login
 - `GET /user/logout` - Logout user
 - `GET /user/profile` - User profile (requires auth)
+- `GET /user/password-reset-request` - Password reset request page
+- `POST /user/password-reset-request` - Process password reset request
+- `GET /user/password-reset-confirm` - Password reset confirmation page
+- `POST /user/password-reset-confirm` - Process password reset
 
 #### Content Management
 - `GET /` - Home page
@@ -281,9 +286,9 @@ MIT License. See [LICENSE](LICENSE) for details.
 - [x] Create RESTful API endpoints
 - [x] Add template system with embedded templates
 - [X] Improve documentation
+- [x] add password reset
 - [ ] Add an admin template and switch administration pages
 - [ ] Add settings table so features can be dynamically set without restart
-- [ ] add password reset
 - [ ] add 2FA with 6-digit code sent to email
 - [ ] make public nav menu dynamic
 - [ ] add left nav for admin pages

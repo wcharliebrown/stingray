@@ -4,20 +4,23 @@ import (
 	"html/template"
 	"net/http"
 	"stingray/database"
+	"stingray/logging"
 	"stingray/templates"
 )
 
 // AuthHandler handles authentication-related requests
 type AuthHandler struct {
-	db *database.Database
-	sm *SessionMiddleware
+	db     *database.Database
+	sm     *SessionMiddleware
+	logger *logging.Logger
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(db *database.Database) *AuthHandler {
+func NewAuthHandler(db *database.Database, logger *logging.Logger) *AuthHandler {
 	return &AuthHandler{
-		db: db,
-		sm: NewSessionMiddleware(db),
+		db:     db,
+		sm:     NewSessionMiddleware(db),
+		logger: logger,
 	}
 }
 
@@ -32,6 +35,7 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	page, err := h.db.GetPage("login")
 	if err != nil {
 		database.LogSQLError(err)
+		h.logger.LogError("Login page not found: %v", err)
 		RenderMessage(w, "Login Page Not Found", "Login Page Not Found", "error", "The login page could not be found.", "/", "Go Home", http.StatusNotFound)
 		return
 	}
@@ -68,10 +72,20 @@ func (h *AuthHandler) HandleLoginPost(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Footer = "© 2024 Sting Ray CMS"
 
+	// Get remote address for logging
+	remoteAddr := r.RemoteAddr
+	if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
+		remoteAddr = forwardedFor
+	}
+
 	// Authenticate user against database
 	user, err := h.db.AuthenticateUser(username, password)
 	if err != nil {
 		database.LogSQLError(err)
+		// Log failed login attempt
+		if h.logger != nil {
+			h.logger.LogLogin(username, remoteAddr, false)
+		}
 		data.Title = "Login Failed - Sting Ray"
 		data.MetaDescription = "Login failed"
 		data.Header = "Login Failed"
@@ -84,6 +98,10 @@ func (h *AuthHandler) HandleLoginPost(w http.ResponseWriter, r *http.Request) {
 		session, err := h.db.CreateSession(user.ID, user.Username, SessionDuration)
 		if err != nil {
 			database.LogSQLError(err)
+			// Log failed login attempt (authentication succeeded but session creation failed)
+			if h.logger != nil {
+				h.logger.LogLogin(username, remoteAddr, false)
+			}
 			data.Title = "Login Error - Sting Ray"
 			data.MetaDescription = "Login error"
 			data.Header = "Login Error"
@@ -94,6 +112,11 @@ func (h *AuthHandler) HandleLoginPost(w http.ResponseWriter, r *http.Request) {
 		} else {
 			// Set session cookie
 			h.sm.SetSessionCookie(w, session.SessionID)
+			
+			// Log successful login
+			if h.logger != nil {
+				h.logger.LogLogin(username, remoteAddr, true)
+			}
 			
 			data.Title = "Login Success - Sting Ray"
 			data.MetaDescription = "Login successful"

@@ -80,3 +80,6 @@ If a user is in a group with write permission to a row in any table, they can ed
 This will allow us to make certain pages "public" in other words accessible by the 'everyone group, while maintaining tighter control on other pages for site administration.
 
 Add a boolead 'debugging_mode' in the .env and env.example. If it is turned on, log all database queries to logs/db_query.log
+add password reset. Use a .DKIM_KEY.txt file defined in the .env file and send using SMTP to localhost
+
+Use two new log files in logs/ folder logs/access-log is for apache-like page requests. logs/error-log is for any error in the application. Add a logging_level to .env file . A value of 1 is just errors. 2 is errors and user logins. 3 is verbose

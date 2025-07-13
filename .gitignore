@@ -32,6 +32,9 @@ go.work.sum
 # env file
 .env
 
+#email key
+.DKIM_KEY.txt
+
 # Editor/IDE
 # .idea/
 # .vscode/

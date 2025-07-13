@@ -188,6 +188,30 @@ func (d *Database) initDatabase() error {
 		return err
 	}
 
+	// Create password reset tokens table
+	createPasswordResetTokensQuery := `
+	CREATE TABLE IF NOT EXISTS _password_reset_token (
+		id INT AUTO_INCREMENT PRIMARY KEY,
+		user_id INT NOT NULL,
+		token VARCHAR(255) UNIQUE NOT NULL,
+		email VARCHAR(255) NOT NULL,
+		expires_at TIMESTAMP NOT NULL,
+		used BOOLEAN DEFAULT FALSE,
+		created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		INDEX idx_token (token),
+		INDEX idx_user_id (user_id),
+		INDEX idx_expires_at (expires_at),
+		INDEX idx_used (used),
+		FOREIGN KEY (user_id) REFERENCES _user(id) ON DELETE CASCADE
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+
+	_, err = d.Exec(createPasswordResetTokensQuery)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
 	// Initialize with default pages and users
 	if err := d.initializePages(); err != nil {
 		LogSQLError(err)
@@ -330,6 +354,36 @@ func (d *Database) initializePages() error {
 			Scripts:        "",
 			Template:       "modern",
 			ReadGroups:     sql.NullString{String: "[\"customers\", \"admin\", \"engineer\"]", Valid: true},
+			WriteGroups:    sql.NullString{String: "[\"admin\", \"engineer\"]", Valid: true},
+		},
+		{
+			Slug:           "password-reset-request",
+			Title:          "Password Reset Request - Sting Ray",
+			MetaDescription: "Request a password reset",
+			Header:         "Password Reset Request",
+			Navigation:     `<a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/login">Login</a>`,
+			MainContent:    `<h2>Password Reset Request</h2><p>Enter your email address to receive a password reset link.</p><div class="card"><form action="/user/password-reset-request" method="post"><div class="form-group"><label for="email">Email Address:</label><input type="email" id="email" name="email" required></div><button type="submit" class="btn">Send Reset Link</button></form></div>`,
+			Sidebar:        `<h3>Need Help?</h3><p>If you don't remember your email address, contact the administrator for assistance.</p>`,
+			Footer:         "© 2024 Sting Ray CMS",
+			CSSClass:       "modern",
+			Scripts:        "",
+			Template:       "modern",
+			ReadGroups:     sql.NullString{String: "[\"everyone\"]", Valid: true},
+			WriteGroups:    sql.NullString{String: "[\"admin\", \"engineer\"]", Valid: true},
+		},
+		{
+			Slug:           "password-reset-confirm",
+			Title:          "Reset Password - Sting Ray",
+			MetaDescription: "Reset your password",
+			Header:         "Reset Password",
+			Navigation:     `<a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/login">Login</a>`,
+			MainContent:    `<h2>Reset Password</h2><p>Enter your new password below.</p><div class="card"><form method="post"><input type="hidden" name="token" value="%s"><div class="form-group"><label for="password">New Password:</label><input type="password" id="password" name="password" required></div><div class="form-group"><label for="confirm_password">Confirm Password:</label><input type="password" id="confirm_password" name="confirm_password" required></div><button type="submit" class="btn">Reset Password</button></form></div>`,
+			Sidebar:        `<h3>Password Requirements</h3><ul><li>At least 8 characters long</li><li>Include uppercase and lowercase letters</li><li>Include numbers and special characters</li></ul>`,
+			Footer:         "© 2024 Sting Ray CMS",
+			CSSClass:       "modern",
+			Scripts:        "",
+			Template:       "modern",
+			ReadGroups:     sql.NullString{String: "[\"everyone\"]", Valid: true},
 			WriteGroups:    sql.NullString{String: "[\"admin\", \"engineer\"]", Valid: true},
 		},
 	}
@@ -2928,4 +2982,71 @@ func (d *Database) CreateTableWithMetadata(tableName, displayName, description, 
 
 	// Commit the transaction
 	return tx.Commit()
+}
+
+// Password Reset Functions
+
+// CreatePasswordResetToken creates a new password reset token for a user
+func (d *Database) CreatePasswordResetToken(userID int, email string, token string, expiresAt time.Time) error {
+	_, err := d.Exec(`
+		INSERT INTO _password_reset_token (user_id, token, email, expires_at)
+		VALUES (?, ?, ?, ?)`,
+		userID, token, email, expiresAt)
+	if err != nil {
+		LogSQLError(err)
+		return fmt.Errorf("failed to create password reset token: %w", err)
+	}
+	return nil
+}
+
+// GetPasswordResetToken retrieves a password reset token by token string
+func (d *Database) GetPasswordResetToken(token string) (*models.PasswordResetToken, error) {
+	var resetToken models.PasswordResetToken
+	err := d.QueryRow(`
+		SELECT id, user_id, token, email, expires_at, used, created, modified
+		FROM _password_reset_token WHERE token = ?`,
+		token).Scan(
+		&resetToken.ID, &resetToken.UserID, &resetToken.Token, &resetToken.Email,
+		&resetToken.ExpiresAt, &resetToken.Used, &resetToken.CreatedAt, &resetToken.UpdatedAt)
+	if err != nil {
+		LogSQLError(err)
+		return nil, err
+	}
+	return &resetToken, nil
+}
+
+// MarkPasswordResetTokenUsed marks a password reset token as used
+func (d *Database) MarkPasswordResetTokenUsed(token string) error {
+	_, err := d.Exec("UPDATE _password_reset_token SET used = TRUE WHERE token = ?", token)
+	if err != nil {
+		LogSQLError(err)
+		return fmt.Errorf("failed to mark token as used: %w", err)
+	}
+	return nil
+}
+
+// CleanupExpiredPasswordResetTokens removes expired password reset tokens
+func (d *Database) CleanupExpiredPasswordResetTokens() error {
+	_, err := d.Exec("DELETE FROM _password_reset_token WHERE expires_at < NOW()")
+	if err != nil {
+		LogSQLError(err)
+		return fmt.Errorf("failed to cleanup expired tokens: %w", err)
+	}
+	return nil
+}
+
+// GetUserByEmail retrieves a user by email address
+func (d *Database) GetUserByEmail(email string) (*models.User, error) {
+	var user models.User
+	err := d.QueryRow(`
+		SELECT id, username, email, password, read_groups, write_groups, created, modified
+		FROM _user WHERE email = ?`,
+		email).Scan(
+		&user.ID, &user.Username, &user.Email, &user.Password,
+		&user.ReadGroups, &user.WriteGroups, &user.CreatedAt, &user.UpdatedAt)
+	if err != nil {
+		LogSQLError(err)
+		return nil, err
+	}
+	return &user, nil
 }
