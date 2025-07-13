@@ -2767,3 +2767,165 @@ func (d *Database) DeleteFieldMetadata(tableName, fieldName string) error {
 	}
 	return nil
 }
+
+// CreateTableWithMetadata creates a new table with metadata and field metadata
+func (d *Database) CreateTableWithMetadata(tableName, displayName, description, readGroups, writeGroups string, fields []models.FieldMetadata) error {
+	// Start a transaction
+	tx, err := d.Begin()
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	defer tx.Rollback()
+
+	// Create the actual table
+	createTableSQL := "CREATE TABLE `" + tableName + "` ("
+	createTableSQL += "id INT AUTO_INCREMENT PRIMARY KEY, "
+	
+	// Add management fields
+	createTableSQL += "created TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+	createTableSQL += "modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, "
+	createTableSQL += "read_groups TEXT, "
+	createTableSQL += "write_groups TEXT"
+	
+	// Add custom fields
+	for _, field := range fields {
+		if field.FieldName != "id" && field.FieldName != "created" && field.FieldName != "modified" && 
+		   field.FieldName != "read_groups" && field.FieldName != "write_groups" {
+			createTableSQL += ", `" + field.FieldName + "` " + field.DBType
+			if field.IsRequired {
+				createTableSQL += " NOT NULL"
+			}
+			if field.DefaultValue != "" {
+				createTableSQL += " DEFAULT '" + field.DefaultValue + "'"
+			}
+		}
+	}
+	
+	createTableSQL += ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+
+	_, err = tx.Exec(createTableSQL)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Create table metadata
+	tableMetadata := &models.TableMetadata{
+		TableName:   tableName,
+		DisplayName: displayName,
+		Description: description,
+		ReadGroups:  readGroups,
+		WriteGroups: writeGroups,
+	}
+
+	_, err = tx.Exec(`
+		INSERT INTO _table_metadata (table_name, display_name, description, read_groups, write_groups)
+		VALUES (?, ?, ?, ?, ?)`,
+		tableMetadata.TableName, tableMetadata.DisplayName, tableMetadata.Description,
+		tableMetadata.ReadGroups, tableMetadata.WriteGroups)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Create management field metadata
+	managementFields := []models.FieldMetadata{
+		{
+			TableName:     tableName,
+			FieldName:     "id",
+			DisplayName:   "ID",
+			Description:   "Unique identifier",
+			DBType:        "INT",
+			HTMLInputType: "number",
+			FormPosition:  0,
+			ListPosition:  0,
+			IsRequired:    true,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     tableName,
+			FieldName:     "created",
+			DisplayName:   "Created",
+			Description:   "Record creation date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  -1, // Don't show in form
+			ListPosition:  -1, // Don't show in list
+			IsRequired:    false,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     tableName,
+			FieldName:     "modified",
+			DisplayName:   "Modified",
+			Description:   "Last update date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  -1, // Don't show in form
+			ListPosition:  -1, // Don't show in list
+			IsRequired:    false,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     tableName,
+			FieldName:     "read_groups",
+			DisplayName:   "Read Groups",
+			Description:   "JSON array of groups that can read this record",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  -1, // Don't show in form
+			ListPosition:  -1, // Don't show in list
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     tableName,
+			FieldName:     "write_groups",
+			DisplayName:   "Write Groups",
+			Description:   "JSON array of groups that can write to this record",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  -1, // Don't show in form
+			ListPosition:  -1, // Don't show in list
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+	}
+
+	// Insert management field metadata
+	for _, field := range managementFields {
+		_, err = tx.Exec(`
+			INSERT INTO _field_metadata (table_name, field_name, display_name, description, db_type, html_input_type,
+			                           form_position, list_position, is_required, is_read_only, default_value, validation_rules)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			field.TableName, field.FieldName, field.DisplayName, field.Description,
+			field.DBType, field.HTMLInputType, field.FormPosition, field.ListPosition,
+			field.IsRequired, field.IsReadOnly, field.DefaultValue, field.ValidationRules)
+		if err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	// Insert custom field metadata
+	for _, field := range fields {
+		if field.FieldName != "id" && field.FieldName != "created" && field.FieldName != "modified" && 
+		   field.FieldName != "read_groups" && field.FieldName != "write_groups" {
+			_, err = tx.Exec(`
+				INSERT INTO _field_metadata (table_name, field_name, display_name, description, db_type, html_input_type,
+				                           form_position, list_position, is_required, is_read_only, default_value, validation_rules)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				field.TableName, field.FieldName, field.DisplayName, field.Description,
+				field.DBType, field.HTMLInputType, field.FormPosition, field.ListPosition,
+				field.IsRequired, field.IsReadOnly, field.DefaultValue, field.ValidationRules)
+			if err != nil {
+				LogSQLError(err)
+				return err
+			}
+		}
+	}
+
+	// Commit the transaction
+	return tx.Commit()
+}

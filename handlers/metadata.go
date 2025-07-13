@@ -171,6 +171,12 @@ func (h *MetadataHandler) HandleTableList(w http.ResponseWriter, r *http.Request
 			</div>
 			{{end}}
 			
+			{{if or .IsEngineer .IsAdmin .EngineerMode}}
+			<div class="table-actions" style="margin-bottom: 2rem;">
+				<a href="/metadata/create-table" class="btn btn-success">Create Table</a>
+			</div>
+			{{end}}
+			
 			<ul class="table-list">
 				{{range .Tables}}
 				<li class="table-item">
@@ -998,4 +1004,396 @@ func (h *MetadataHandler) HandleDeleteTable(w http.ResponseWriter, r *http.Reque
 
 	// Redirect back to tables list
 	http.Redirect(w, r, "/metadata/tables", http.StatusSeeOther)
+} 
+
+// HandleCreateTable handles creating new tables with metadata
+func (h *MetadataHandler) HandleCreateTable(w http.ResponseWriter, r *http.Request) {
+	// Check if user is authenticated
+	if !h.sm.IsAuthenticated(r) {
+		http.Redirect(w, r, "/user/login", http.StatusSeeOther)
+		return
+	}
+
+	// Check user permissions - only admin and engineer can create tables
+	session, err := h.sm.GetSessionFromRequest(r)
+	if err != nil {
+		http.Error(w, "User not authenticated", http.StatusUnauthorized)
+		return
+	}
+	userID := session.UserID
+
+	isAdmin, _ := h.db.IsUserInGroup(userID, "admin")
+	isEngineer, _ := h.db.IsUserInGroup(userID, "engineer")
+
+	if !isAdmin && !isEngineer {
+		http.Error(w, "Access denied", http.StatusForbidden)
+		return
+	}
+
+	// Handle form submission
+	if r.Method == "POST" {
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Error parsing form", http.StatusBadRequest)
+			return
+		}
+
+		// Get table information
+		tableName := r.FormValue("table_name")
+		displayName := r.FormValue("display_name")
+		description := r.FormValue("description")
+		readGroups := r.FormValue("read_groups")
+		writeGroups := r.FormValue("write_groups")
+
+		// Validate table name
+		if tableName == "" {
+			http.Error(w, "Table name is required", http.StatusBadRequest)
+			return
+		}
+
+		// Check if table already exists
+		existingTable, err := h.db.GetTableMetadata(tableName)
+		if err == nil && existingTable != nil {
+			http.Error(w, "Table already exists", http.StatusBadRequest)
+			return
+		}
+
+		// Parse fields from form
+		var fields []models.FieldMetadata
+		fieldCount := 0
+		for {
+			fieldName := r.FormValue(fmt.Sprintf("fields[%d][field_name]", fieldCount))
+			if fieldName == "" {
+				break
+			}
+
+			// Skip management fields
+			if fieldName == "id" || fieldName == "created" || fieldName == "modified" || 
+			   fieldName == "read_groups" || fieldName == "write_groups" {
+				fieldCount++
+				continue
+			}
+
+			displayName := r.FormValue(fmt.Sprintf("fields[%d][display_name]", fieldCount))
+			fieldDescription := r.FormValue(fmt.Sprintf("fields[%d][description]", fieldCount))
+			dbType := r.FormValue(fmt.Sprintf("fields[%d][db_type]", fieldCount))
+			htmlInputType := r.FormValue(fmt.Sprintf("fields[%d][html_input_type]", fieldCount))
+			formPositionStr := r.FormValue(fmt.Sprintf("fields[%d][form_position]", fieldCount))
+			listPositionStr := r.FormValue(fmt.Sprintf("fields[%d][list_position]", fieldCount))
+			isRequiredStr := r.FormValue(fmt.Sprintf("fields[%d][is_required]", fieldCount))
+			isReadOnlyStr := r.FormValue(fmt.Sprintf("fields[%d][is_read_only]", fieldCount))
+			defaultValue := r.FormValue(fmt.Sprintf("fields[%d][default_value]", fieldCount))
+			validationRules := r.FormValue(fmt.Sprintf("fields[%d][validation_rules]", fieldCount))
+
+			formPosition, _ := strconv.Atoi(formPositionStr)
+			listPosition, _ := strconv.Atoi(listPositionStr)
+			isRequired := isRequiredStr == "on"
+			isReadOnly := isReadOnlyStr == "on"
+
+			field := models.FieldMetadata{
+				TableName:       tableName,
+				FieldName:       fieldName,
+				DisplayName:     displayName,
+				Description:     fieldDescription,
+				DBType:          dbType,
+				HTMLInputType:   htmlInputType,
+				FormPosition:    formPosition,
+				ListPosition:    listPosition,
+				IsRequired:      isRequired,
+				IsReadOnly:      isReadOnly,
+				DefaultValue:    defaultValue,
+				ValidationRules: validationRules,
+			}
+
+			fields = append(fields, field)
+			fieldCount++
+		}
+
+		// Create the table with metadata
+		if err := h.db.CreateTableWithMetadata(tableName, displayName, description, readGroups, writeGroups, fields); err != nil {
+			database.LogSQLError(err)
+			http.Error(w, "Error creating table", http.StatusInternalServerError)
+			return
+		}
+
+		// Redirect back to tables list
+		http.Redirect(w, r, "/metadata/tables", http.StatusSeeOther)
+		return
+	}
+
+	// Check if JSON response is requested
+	if r.URL.Query().Get("response_format") == "json" {
+		response := map[string]interface{}{
+			"message": "Create table form",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// HTML response
+	tmpl := `
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Create New Table - Sting Ray</title>
+		<style>
+			body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; margin: 0; padding: 2rem; }
+			.container { max-width: 1000px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+			h1 { color: #2c3e50; margin-bottom: 1rem; }
+			.form-group { margin-bottom: 1rem; }
+			label { display: block; margin-bottom: 0.5rem; font-weight: 600; }
+			input, textarea, select { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; }
+			textarea { min-height: 100px; }
+			.btn { padding: 0.75rem 1.5rem; border: none; border-radius: 4px; text-decoration: none; font-size: 1rem; cursor: pointer; margin-right: 0.5rem; }
+			.btn-primary { background: #667eea; color: white; }
+			.btn-secondary { background: #6c757d; color: white; }
+			.btn-success { background: #28a745; color: white; }
+			.btn:hover { opacity: 0.8; }
+			.help-text { font-size: 0.9rem; color: #6c757d; margin-top: 0.25rem; }
+			.field-section { border: 1px solid #e9ecef; border-radius: 4px; padding: 1rem; margin-bottom: 1rem; }
+			.field-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+			.field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+			.remove-field { background: #dc3545; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; }
+			.add-field { background: #28a745; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; margin-top: 1rem; }
+			.checkbox-group { display: flex; gap: 1rem; }
+			.checkbox-group label { display: flex; align-items: center; font-weight: normal; }
+			.checkbox-group input { width: auto; margin-right: 0.5rem; }
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<h1>Create New Table</h1>
+			<form method="POST" id="createTableForm">
+				<div class="form-group">
+					<label for="table_name">Table Name</label>
+					<input type="text" name="table_name" id="table_name" required>
+					<div class="help-text">Database table name (e.g., products, orders, customers)</div>
+				</div>
+				<div class="form-group">
+					<label for="display_name">Display Name</label>
+					<input type="text" name="display_name" id="display_name" required>
+					<div class="help-text">Human-readable name for the table</div>
+				</div>
+				<div class="form-group">
+					<label for="description">Description</label>
+					<textarea name="description" id="description"></textarea>
+					<div class="help-text">Description of what this table contains</div>
+				</div>
+				<div class="form-group">
+					<label for="read_groups">Read Groups (JSON array)</label>
+					<textarea name="read_groups" id="read_groups">["admin", "engineer"]</textarea>
+					<div class="help-text">Example: ["admin", "engineer", "everyone"]</div>
+				</div>
+				<div class="form-group">
+					<label for="write_groups">Write Groups (JSON array)</label>
+					<textarea name="write_groups" id="write_groups">["admin", "engineer"]</textarea>
+					<div class="help-text">Example: ["admin", "engineer"]</div>
+				</div>
+
+				<h2>Fields</h2>
+				<div id="fieldsContainer">
+					<div class="field-section" data-field-index="0">
+						<div class="field-header">
+							<h3>Field 1</h3>
+							<button type="button" class="remove-field" onclick="removeField(this)">Remove</button>
+						</div>
+						<div class="field-grid">
+							<div class="form-group">
+								<label>Field Name</label>
+								<input type="text" name="fields[0][field_name]" required>
+								<div class="help-text">Database field name (e.g., name, email, price)</div>
+							</div>
+							<div class="form-group">
+								<label>Display Name</label>
+								<input type="text" name="fields[0][display_name]" required>
+								<div class="help-text">Human-readable field name</div>
+							</div>
+							<div class="form-group">
+								<label>Description</label>
+								<input type="text" name="fields[0][description]">
+								<div class="help-text">Field description</div>
+							</div>
+							<div class="form-group">
+								<label>DB Type</label>
+								<select name="fields[0][db_type]" required>
+									<option value="VARCHAR(255)">VARCHAR(255)</option>
+									<option value="TEXT">TEXT</option>
+									<option value="INT">INT</option>
+									<option value="DECIMAL(10,2)">DECIMAL(10,2)</option>
+									<option value="BOOLEAN">BOOLEAN</option>
+									<option value="DATE">DATE</option>
+									<option value="DATETIME">DATETIME</option>
+									<option value="TIMESTAMP">TIMESTAMP</option>
+								</select>
+							</div>
+							<div class="form-group">
+								<label>HTML Input Type</label>
+								<select name="fields[0][html_input_type]" required>
+									<option value="text">text</option>
+									<option value="email">email</option>
+									<option value="password">password</option>
+									<option value="number">number</option>
+									<option value="textarea">textarea</option>
+									<option value="select">select</option>
+									<option value="checkbox">checkbox</option>
+									<option value="datetime-local">datetime-local</option>
+									<option value="date">date</option>
+								</select>
+							</div>
+							<div class="form-group">
+								<label>Form Position</label>
+								<input type="number" name="fields[0][form_position]" value="1" min="0">
+								<div class="help-text">Position in edit form (0-based)</div>
+							</div>
+							<div class="form-group">
+								<label>List Position</label>
+								<input type="number" name="fields[0][list_position]" value="1" min="-1">
+								<div class="help-text">Position in table listing (-1 to hide)</div>
+							</div>
+							<div class="form-group">
+								<label>Default Value</label>
+								<input type="text" name="fields[0][default_value]">
+								<div class="help-text">Default value for the field</div>
+							</div>
+							<div class="form-group">
+								<label>Validation Rules</label>
+								<textarea name="fields[0][validation_rules]"></textarea>
+								<div class="help-text">JSON validation rules</div>
+							</div>
+						</div>
+						<div class="checkbox-group">
+							<label>
+								<input type="checkbox" name="fields[0][is_required]">
+								Required
+							</label>
+							<label>
+								<input type="checkbox" name="fields[0][is_read_only]">
+								Read Only
+							</label>
+						</div>
+					</div>
+				</div>
+
+				<button type="button" class="add-field" onclick="addField()">Add Field</button>
+
+				<div class="form-group" style="margin-top: 2rem;">
+					<button type="submit" class="btn btn-primary">Create Table</button>
+					<a href="/metadata/tables" class="btn btn-secondary">Cancel</a>
+				</div>
+			</form>
+		</div>
+
+		<script>
+			let fieldIndex = 1;
+
+			function addField() {
+				const container = document.getElementById('fieldsContainer');
+				const newField = document.createElement('div');
+				newField.className = 'field-section';
+				newField.setAttribute('data-field-index', fieldIndex);
+				
+				newField.innerHTML = 
+					'<div class="field-header">' +
+						'<h3>Field ' + (fieldIndex + 1) + '</h3>' +
+						'<button type="button" class="remove-field" onclick="removeField(this)">Remove</button>' +
+					'</div>' +
+					'<div class="field-grid">' +
+						'<div class="form-group">' +
+							'<label>Field Name</label>' +
+							'<input type="text" name="fields[' + fieldIndex + '][field_name]" required>' +
+							'<div class="help-text">Database field name (e.g., name, email, price)</div>' +
+						'</div>' +
+						'<div class="form-group">' +
+							'<label>Display Name</label>' +
+							'<input type="text" name="fields[' + fieldIndex + '][display_name]" required>' +
+							'<div class="help-text">Human-readable field name</div>' +
+						'</div>' +
+						'<div class="form-group">' +
+							'<label>Description</label>' +
+							'<input type="text" name="fields[' + fieldIndex + '][description]">' +
+							'<div class="help-text">Field description</div>' +
+						'</div>' +
+						'<div class="form-group">' +
+							'<label>DB Type</label>' +
+							'<select name="fields[' + fieldIndex + '][db_type]" required>' +
+								'<option value="VARCHAR(255)">VARCHAR(255)</option>' +
+								'<option value="TEXT">TEXT</option>' +
+								'<option value="INT">INT</option>' +
+								'<option value="DECIMAL(10,2)">DECIMAL(10,2)</option>' +
+								'<option value="BOOLEAN">BOOLEAN</option>' +
+								'<option value="DATE">DATE</option>' +
+								'<option value="DATETIME">DATETIME</option>' +
+								'<option value="TIMESTAMP">TIMESTAMP</option>' +
+							'</select>' +
+						'</div>' +
+						'<div class="form-group">' +
+							'<label>HTML Input Type</label>' +
+							'<select name="fields[' + fieldIndex + '][html_input_type]" required>' +
+								'<option value="text">text</option>' +
+								'<option value="email">email</option>' +
+								'<option value="password">password</option>' +
+								'<option value="number">number</option>' +
+								'<option value="textarea">textarea</option>' +
+								'<option value="select">select</option>' +
+								'<option value="checkbox">checkbox</option>' +
+								'<option value="datetime-local">datetime-local</option>' +
+								'<option value="date">date</option>' +
+							'</select>' +
+						'</div>' +
+						'<div class="form-group">' +
+							'<label>Form Position</label>' +
+							'<input type="number" name="fields[' + fieldIndex + '][form_position]" value="' + (fieldIndex + 1) + '" min="0">' +
+							'<div class="help-text">Position in edit form (0-based)</div>' +
+						'</div>' +
+						'<div class="form-group">' +
+							'<label>List Position</label>' +
+							'<input type="number" name="fields[' + fieldIndex + '][list_position]" value="' + (fieldIndex + 1) + '" min="-1">' +
+							'<div class="help-text">Position in table listing (-1 to hide)</div>' +
+						'</div>' +
+						'<div class="form-group">' +
+							'<label>Default Value</label>' +
+							'<input type="text" name="fields[' + fieldIndex + '][default_value]">' +
+							'<div class="help-text">Default value for the field</div>' +
+						'</div>' +
+						'<div class="form-group">' +
+							'<label>Validation Rules</label>' +
+							'<textarea name="fields[' + fieldIndex + '][validation_rules]"></textarea>' +
+							'<div class="help-text">JSON validation rules</div>' +
+						'</div>' +
+					'</div>' +
+					'<div class="checkbox-group">' +
+						'<label>' +
+							'<input type="checkbox" name="fields[' + fieldIndex + '][is_required]">' +
+							'Required' +
+						'</label>' +
+						'<label>' +
+							'<input type="checkbox" name="fields[' + fieldIndex + '][is_read_only]">' +
+							'Read Only' +
+						'</label>' +
+					'</div>';
+				
+				container.appendChild(newField);
+				fieldIndex++;
+			}
+
+			function removeField(button) {
+				const fieldSection = button.closest('.field-section');
+				if (document.querySelectorAll('.field-section').length > 1) {
+					fieldSection.remove();
+				}
+			}
+		</script>
+	</body>
+	</html>`
+
+	t, err := template.New("create_table").Parse(tmpl)
+	if err != nil {
+		http.Error(w, "Error parsing template", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	t.Execute(w, nil)
 } 

@@ -63,4 +63,29 @@ type FormData struct {
 	Row          TableRow
 	IsNew        bool
 	EngineerMode bool
+}
+
+// CreateTableData represents the structure for creating new tables
+type CreateTableData struct {
+	TableName    string
+	DisplayName  string
+	Description  string
+	ReadGroups   string
+	WriteGroups  string
+	Fields       []CreateFieldData
+}
+
+// CreateFieldData represents a field for table creation
+type CreateFieldData struct {
+	FieldName       string
+	DisplayName     string
+	Description     string
+	DBType          string
+	HTMLInputType   string
+	FormPosition    int
+	ListPosition    int
+	IsRequired      bool
+	IsReadOnly      bool
+	DefaultValue    string
+	ValidationRules string
 } 
