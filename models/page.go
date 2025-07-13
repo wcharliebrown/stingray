@@ -1,5 +1,9 @@
 package models
 
+import (
+	"time"
+)
+
 type Page struct {
 	ID             int
 	Slug           string
@@ -13,4 +17,6 @@ type Page struct {
 	CSSClass       string
 	Scripts        string
 	Template       string
+	Created        time.Time
+	Modified       time.Time
 } 

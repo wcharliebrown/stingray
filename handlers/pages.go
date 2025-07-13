@@ -43,8 +43,26 @@ func (h *PageHandler) HandleHome(w http.ResponseWriter, r *http.Request) {
 		if username == "" {
 			username = "User"
 		}
-		page.Navigation = `<a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/profile">Profile</a> | <a href="/user/logout">Logout</a>`
-		page.Sidebar = `<h3>Welcome, ` + username + `!</h3><ul><li><a href="/page/about">About</a></li><li><a href="/page/demo">Demo</a></li><li><a href="/user/profile">Profile</a></li><li><a href="/user/logout">Logout</a></li></ul>`
+		
+		// Check if user is admin
+		session, err := h.sm.GetSessionFromRequest(r)
+		var isAdmin bool
+		if err == nil {
+			isAdmin, _ = h.db.IsUserInGroup(session.UserID, "admin")
+		}
+		
+		// Build navigation with admin-specific links
+		nav := `<a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/profile">Profile</a> | <a href="/user/logout">Logout</a>`
+		sidebar := `<h3>Welcome, ` + username + `!</h3><ul><li><a href="/page/about">About</a></li><li><a href="/page/demo">Demo</a></li><li><a href="/user/profile">Profile</a></li><li><a href="/user/logout">Logout</a></li>`
+		
+		if isAdmin {
+			nav += ` | <a href="/metadata/tables">Database Tables</a>`
+			sidebar += `<li><a href="/metadata/tables">Database Tables</a></li>`
+		}
+		
+		sidebar += `</ul>`
+		page.Navigation = nav
+		page.Sidebar = sidebar
 	} else {
 		page.Navigation = `<a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/login">Login</a>`
 		page.Sidebar = `<h3>Quick Links</h3><ul><li><a href="/page/about">About</a></li><li><a href="/page/demo">Demo</a></li><li><a href="/user/login">Login</a></li></ul>`
@@ -88,7 +106,22 @@ func (h *PageHandler) HandlePage(w http.ResponseWriter, r *http.Request) {
 			if username == "" {
 				username = "User"
 			}
-			page.Navigation = `<a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/profile">Profile</a> | <a href="/user/logout">Logout</a>`
+			
+			// Check if user is admin
+			session, err := h.sm.GetSessionFromRequest(r)
+			var isAdmin bool
+			if err == nil {
+				isAdmin, _ = h.db.IsUserInGroup(session.UserID, "admin")
+			}
+			
+			// Build navigation with admin-specific links
+			nav := `<a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/profile">Profile</a> | <a href="/user/logout">Logout</a>`
+			
+			if isAdmin {
+				nav += ` | <a href="/metadata/tables">Database Tables</a>`
+			}
+			
+			page.Navigation = nav
 		} else {
 			page.Navigation = `<a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/login">Login</a>`
 		}

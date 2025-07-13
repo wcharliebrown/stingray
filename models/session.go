@@ -9,7 +9,7 @@ type Session struct {
 	SessionID string
 	UserID    int
 	Username  string
-	CreatedAt time.Time
+	CreatedAt time.Time // This will map to 'created' in the database
 	ExpiresAt time.Time
 	IsActive  bool
 } 

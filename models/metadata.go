@@ -12,8 +12,8 @@ type TableMetadata struct {
 	Description string
 	ReadGroups  string // JSON array of group names that can read this table
 	WriteGroups string // JSON array of group names that can write to this table
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	CreatedAt   time.Time // This will map to 'created' in the database
+	UpdatedAt   time.Time // This will map to 'modified' in the database
 }
 
 // FieldMetadata represents metadata for database table fields
@@ -31,8 +31,8 @@ type FieldMetadata struct {
 	IsReadOnly      bool   // Whether field is read-only
 	DefaultValue    string // Default value for the field
 	ValidationRules string // JSON string with validation rules
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	CreatedAt       time.Time // This will map to 'created' in the database
+	UpdatedAt       time.Time // This will map to 'modified' in the database
 }
 
 // TableRow represents a generic row from any table

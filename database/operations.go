@@ -24,7 +24,7 @@ func (d *Database) initDatabase() error {
 
 	// Create pages table
 	createTableQuery := `
-	CREATE TABLE IF NOT EXISTS pages (
+	CREATE TABLE IF NOT EXISTS _page (
 		id INT AUTO_INCREMENT PRIMARY KEY,
 		slug VARCHAR(255) UNIQUE NOT NULL,
 		title VARCHAR(255) NOT NULL,
@@ -36,7 +36,9 @@ func (d *Database) initDatabase() error {
 		footer TEXT,
 		css_class VARCHAR(255),
 		scripts TEXT,
-		template VARCHAR(100) DEFAULT 'default'
+		template VARCHAR(100) DEFAULT 'default',
+		created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
 	_, err = d.db.Exec(createTableQuery)
@@ -47,11 +49,12 @@ func (d *Database) initDatabase() error {
 
 	// Create groups table (no dependencies)
 	createGroupsTableQuery := `
-	CREATE TABLE IF NOT EXISTS user_groups_table (
+	CREATE TABLE IF NOT EXISTS _groups (
 		id INT AUTO_INCREMENT PRIMARY KEY,
 		name VARCHAR(255) UNIQUE NOT NULL,
 		description TEXT,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		INDEX idx_name (name)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
@@ -63,13 +66,13 @@ func (d *Database) initDatabase() error {
 
 	// Create users table (no dependencies)
 	createUsersTableQuery := `
-	CREATE TABLE IF NOT EXISTS users (
+	CREATE TABLE IF NOT EXISTS _users (
 		id INT AUTO_INCREMENT PRIMARY KEY,
 		username VARCHAR(255) UNIQUE NOT NULL,
 		email VARCHAR(255) UNIQUE NOT NULL,
 		password VARCHAR(255) NOT NULL,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		INDEX idx_username (username),
 		INDEX idx_email (email)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
@@ -82,13 +85,15 @@ func (d *Database) initDatabase() error {
 
 	// Create user_groups table (depends on users and groups)
 	createUserGroupsTableQuery := `
-	CREATE TABLE IF NOT EXISTS user_groups (
+	CREATE TABLE IF NOT EXISTS _users_and_groups (
 		id INT AUTO_INCREMENT PRIMARY KEY,
 		user_id INT NOT NULL,
 		group_id INT NOT NULL,
+		created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		UNIQUE KEY unique_user_group (user_id, group_id),
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-		FOREIGN KEY (group_id) REFERENCES user_groups_table(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES _users(id) ON DELETE CASCADE,
+		FOREIGN KEY (group_id) REFERENCES _groups(id) ON DELETE CASCADE,
 		INDEX idx_user_id (user_id),
 		INDEX idx_group_id (group_id)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
@@ -101,18 +106,19 @@ func (d *Database) initDatabase() error {
 
 	// Create sessions table (depends on users)
 	createSessionsTableQuery := `
-	CREATE TABLE IF NOT EXISTS sessions (
+	CREATE TABLE IF NOT EXISTS _sessions (
 		id INT AUTO_INCREMENT PRIMARY KEY,
 		session_id VARCHAR(255) UNIQUE NOT NULL,
 		user_id INT NOT NULL,
 		username VARCHAR(255) NOT NULL,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		expires_at TIMESTAMP NOT NULL,
 		is_active BOOLEAN DEFAULT TRUE,
 		INDEX idx_session_id (session_id),
 		INDEX idx_expires_at (expires_at),
 		INDEX idx_is_active (is_active),
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		FOREIGN KEY (user_id) REFERENCES _users(id) ON DELETE CASCADE
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
 	_, err = d.db.Exec(createSessionsTableQuery)
@@ -121,17 +127,17 @@ func (d *Database) initDatabase() error {
 		return err
 	}
 
-	// Create table_metadata table
+	// Create _table_metadata table
 	createTableMetadataQuery := `
-	CREATE TABLE IF NOT EXISTS table_metadata (
+	CREATE TABLE IF NOT EXISTS _table_metadata (
 		id INT AUTO_INCREMENT PRIMARY KEY,
 		table_name VARCHAR(255) UNIQUE NOT NULL,
 		display_name VARCHAR(255) NOT NULL,
 		description TEXT,
 		read_groups TEXT,
 		write_groups TEXT,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		INDEX idx_table_name (table_name)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
@@ -141,9 +147,9 @@ func (d *Database) initDatabase() error {
 		return err
 	}
 
-	// Create field_metadata table
+	// Create _field_metadata table
 	createFieldMetadataQuery := `
-	CREATE TABLE IF NOT EXISTS field_metadata (
+	CREATE TABLE IF NOT EXISTS _field_metadata (
 		id INT AUTO_INCREMENT PRIMARY KEY,
 		table_name VARCHAR(255) NOT NULL,
 		field_name VARCHAR(255) NOT NULL,
@@ -157,8 +163,8 @@ func (d *Database) initDatabase() error {
 		is_read_only BOOLEAN DEFAULT FALSE,
 		default_value TEXT,
 		validation_rules TEXT,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		UNIQUE KEY unique_table_field (table_name, field_name),
 		INDEX idx_table_name (table_name),
 		INDEX idx_field_name (field_name)
@@ -292,7 +298,7 @@ func (d *Database) initializePages() error {
 func (d *Database) createPageIfNotExists(page models.Page) error {
 	// Check if page exists
 	var count int
-	err := d.db.QueryRow("SELECT COUNT(*) FROM pages WHERE slug = ?", page.Slug).Scan(&count)
+	err := d.db.QueryRow("SELECT COUNT(*) FROM _page WHERE slug = ?", page.Slug).Scan(&count)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -300,7 +306,7 @@ func (d *Database) createPageIfNotExists(page models.Page) error {
 
 	if count == 0 {
 		_, err = d.db.Exec(`
-			INSERT INTO pages (slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template)
+			INSERT INTO _page (slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			page.Slug, page.Title, page.MetaDescription, page.Header, page.Navigation,
 			page.MainContent, page.Sidebar, page.Footer, page.CSSClass, page.Scripts, page.Template)
@@ -316,11 +322,11 @@ func (d *Database) createPageIfNotExists(page models.Page) error {
 func (d *Database) GetPage(slug string) (*models.Page, error) {
 	var page models.Page
 	err := d.db.QueryRow(`
-		SELECT id, slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template
-		FROM pages WHERE slug = ?`, slug).Scan(
+		SELECT id, slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template, created, modified
+		FROM _page WHERE slug = ?`, slug).Scan(
 		&page.ID, &page.Slug, &page.Title, &page.MetaDescription, &page.Header,
 		&page.Navigation, &page.MainContent, &page.Sidebar, &page.Footer,
-		&page.CSSClass, &page.Scripts, &page.Template)
+		&page.CSSClass, &page.Scripts, &page.Template, &page.Created, &page.Modified)
 	if err != nil {
 		LogSQLError(err)
 		return nil, err
@@ -330,8 +336,8 @@ func (d *Database) GetPage(slug string) (*models.Page, error) {
 
 func (d *Database) GetAllPages() ([]models.Page, error) {
 	rows, err := d.db.Query(`
-		SELECT id, slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template
-		FROM pages ORDER BY slug`)
+		SELECT id, slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template, created, modified
+		FROM _page ORDER BY slug`)
 	if err != nil {
 		LogSQLError(err)
 		return nil, err
@@ -344,7 +350,7 @@ func (d *Database) GetAllPages() ([]models.Page, error) {
 		err := rows.Scan(
 			&page.ID, &page.Slug, &page.Title, &page.MetaDescription, &page.Header,
 			&page.Navigation, &page.MainContent, &page.Sidebar, &page.Footer,
-			&page.CSSClass, &page.Scripts, &page.Template)
+			&page.CSSClass, &page.Scripts, &page.Template, &page.Created, &page.Modified)
 		if err != nil {
 			LogSQLError(err)
 			return nil, err
@@ -364,7 +370,7 @@ func (d *Database) CreateSession(userID int, username string, duration time.Dura
 	expiresAt := time.Now().Add(duration)
 
 	_, err = d.db.Exec(`
-		INSERT INTO sessions (session_id, user_id, username, expires_at, is_active)
+		INSERT INTO _sessions (session_id, user_id, username, expires_at, is_active)
 		VALUES (?, ?, ?, ?, TRUE)`,
 		sessionID, userID, username, expiresAt)
 	if err != nil {
@@ -387,8 +393,8 @@ func (d *Database) CreateSession(userID int, username string, duration time.Dura
 func (d *Database) GetSession(sessionID string) (*models.Session, error) {
 	var session models.Session
 	err := d.db.QueryRow(`
-		SELECT id, session_id, user_id, username, created_at, expires_at, is_active
-		FROM sessions WHERE session_id = ? AND is_active = TRUE AND expires_at > NOW()`,
+		SELECT id, session_id, user_id, username, created, expires_at, is_active
+		FROM _sessions WHERE session_id = ? AND is_active = TRUE AND expires_at > NOW()`,
 		sessionID).Scan(
 		&session.ID, &session.SessionID, &session.UserID, &session.Username,
 		&session.CreatedAt, &session.ExpiresAt, &session.IsActive)
@@ -401,7 +407,7 @@ func (d *Database) GetSession(sessionID string) (*models.Session, error) {
 
 func (d *Database) InvalidateSession(sessionID string) error {
 	_, err := d.db.Exec(`
-		UPDATE sessions SET is_active = FALSE WHERE session_id = ?`,
+		UPDATE _sessions SET is_active = FALSE WHERE session_id = ?`,
 		sessionID)
 	if err != nil {
 		LogSQLError(err)
@@ -412,7 +418,7 @@ func (d *Database) InvalidateSession(sessionID string) error {
 
 func (d *Database) CleanupExpiredSessions() error {
 	_, err := d.db.Exec(`
-		UPDATE sessions SET is_active = FALSE WHERE expires_at <= NOW()`)
+		UPDATE _sessions SET is_active = FALSE WHERE expires_at <= NOW()`)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -500,7 +506,7 @@ func (d *Database) initializeUsers() error {
 func (d *Database) createGroupIfNotExists(group models.Group) error {
 	// Check if group exists
 	var count int
-	err := d.db.QueryRow("SELECT COUNT(*) FROM user_groups_table WHERE name = ?", group.Name).Scan(&count)
+	err := d.db.QueryRow("SELECT COUNT(*) FROM _groups WHERE name = ?", group.Name).Scan(&count)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -508,7 +514,7 @@ func (d *Database) createGroupIfNotExists(group models.Group) error {
 
 	if count == 0 {
 		_, err = d.db.Exec(`
-			INSERT INTO user_groups_table (name, description)
+			INSERT INTO _groups (name, description)
 			VALUES (?, ?)`,
 			group.Name, group.Description)
 		if err != nil {
@@ -523,7 +529,7 @@ func (d *Database) createGroupIfNotExists(group models.Group) error {
 func (d *Database) createUserIfNotExists(user models.User, groupNames []string) error {
 	// Check if user exists
 	var count int
-	err := d.db.QueryRow("SELECT COUNT(*) FROM users WHERE username = ?", user.Username).Scan(&count)
+	err := d.db.QueryRow("SELECT COUNT(*) FROM _users WHERE username = ?", user.Username).Scan(&count)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -532,7 +538,7 @@ func (d *Database) createUserIfNotExists(user models.User, groupNames []string) 
 	if count == 0 {
 		// Create user
 		result, err := d.db.Exec(`
-			INSERT INTO users (username, email, password)
+			INSERT INTO _users (username, email, password)
 			VALUES (?, ?, ?)`,
 			user.Username, user.Email, user.Password)
 		if err != nil {
@@ -561,7 +567,7 @@ func (d *Database) createUserIfNotExists(user models.User, groupNames []string) 
 func (d *Database) addUserToGroup(userID int, groupName string) error {
 	// Get group ID
 	var groupID int
-	err := d.db.QueryRow("SELECT id FROM user_groups_table WHERE name = ?", groupName).Scan(&groupID)
+	err := d.db.QueryRow("SELECT id FROM _groups WHERE name = ?", groupName).Scan(&groupID)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -569,7 +575,7 @@ func (d *Database) addUserToGroup(userID int, groupName string) error {
 
 	// Check if user is already in group
 	var count int
-	err = d.db.QueryRow("SELECT COUNT(*) FROM user_groups WHERE user_id = ? AND group_id = ?", userID, groupID).Scan(&count)
+	err = d.db.QueryRow("SELECT COUNT(*) FROM _users_and_groups WHERE user_id = ? AND group_id = ?", userID, groupID).Scan(&count)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -577,7 +583,7 @@ func (d *Database) addUserToGroup(userID int, groupName string) error {
 
 	if count == 0 {
 		_, err = d.db.Exec(`
-			INSERT INTO user_groups (user_id, group_id)
+			INSERT INTO _users_and_groups (user_id, group_id)
 			VALUES (?, ?)`,
 			userID, groupID)
 		if err != nil {
@@ -599,7 +605,7 @@ func (d *Database) CreateUser(username, email, password string) error {
 
 	// Create user
 	result, err := d.db.Exec(`
-		INSERT INTO users (username, email, password)
+		INSERT INTO _users (username, email, password)
 		VALUES (?, ?, ?)`,
 		username, email, hashedPassword)
 	if err != nil {
@@ -631,7 +637,7 @@ func (d *Database) UpdateUserPassword(userID int, newPassword string) error {
 	}
 
 	// Update the password in database
-	_, err = d.db.Exec("UPDATE users SET password = ? WHERE id = ?", hashedPassword, userID)
+	_, err = d.db.Exec("UPDATE _users SET password = ? WHERE id = ?", hashedPassword, userID)
 	if err != nil {
 		LogSQLError(err)
 		return fmt.Errorf("failed to update password: %w", err)
@@ -643,8 +649,8 @@ func (d *Database) UpdateUserPassword(userID int, newPassword string) error {
 func (d *Database) AuthenticateUser(username, password string) (*models.User, error) {
 	var user models.User
 	err := d.db.QueryRow(`
-		SELECT id, username, email, password, created_at, updated_at
-		FROM users WHERE username = ?`,
+		SELECT id, username, email, password, created, modified
+		FROM _users WHERE username = ?`,
 		username).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password,
 		&user.CreatedAt, &user.UpdatedAt)
@@ -664,7 +670,7 @@ func (d *Database) AuthenticateUser(username, password string) (*models.User, er
 			}
 			
 			// Update the password in database
-			_, err = d.db.Exec("UPDATE users SET password = ? WHERE id = ?", hashedPassword, user.ID)
+			_, err = d.db.Exec("UPDATE _users SET password = ? WHERE id = ?", hashedPassword, user.ID)
 			if err != nil {
 				LogSQLError(err)
 				return nil, fmt.Errorf("failed to update password hash: %w", err)
@@ -693,8 +699,8 @@ func (d *Database) AuthenticateUser(username, password string) (*models.User, er
 func (d *Database) GetUserByID(userID int) (*models.User, error) {
 	var user models.User
 	err := d.db.QueryRow(`
-		SELECT id, username, email, password, created_at, updated_at
-		FROM users WHERE id = ?`,
+		SELECT id, username, email, password, created, modified
+		FROM _users WHERE id = ?`,
 		userID).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password,
 		&user.CreatedAt, &user.UpdatedAt)
@@ -707,9 +713,9 @@ func (d *Database) GetUserByID(userID int) (*models.User, error) {
 
 func (d *Database) GetUserGroups(userID int) ([]models.Group, error) {
 	rows, err := d.db.Query(`
-		SELECT g.id, g.name, g.description, g.created_at
-		FROM user_groups_table g
-		JOIN user_groups ug ON g.id = ug.group_id
+		SELECT g.id, g.name, g.description, g.created
+		FROM _groups g
+		JOIN _users_and_groups ug ON g.id = ug.group_id
 		WHERE ug.user_id = ?
 		ORDER BY g.name`,
 		userID)
@@ -737,8 +743,8 @@ func (d *Database) IsUserInGroup(userID int, groupName string) (bool, error) {
 	var count int
 	err := d.db.QueryRow(`
 		SELECT COUNT(*)
-		FROM user_groups ug
-		JOIN user_groups_table g ON ug.group_id = g.id
+		FROM _users_and_groups ug
+		JOIN _groups g ON ug.group_id = g.id
 		WHERE ug.user_id = ? AND g.name = ?`,
 		userID, groupName).Scan(&count)
 	if err != nil {
@@ -750,8 +756,8 @@ func (d *Database) IsUserInGroup(userID int, groupName string) (bool, error) {
 
 func (d *Database) GetAllGroups() ([]models.Group, error) {
 	rows, err := d.db.Query(`
-		SELECT id, name, description, created_at
-		FROM user_groups_table
+		SELECT id, name, description, created
+		FROM _groups
 		ORDER BY name`)
 	if err != nil {
 		LogSQLError(err)
@@ -775,8 +781,8 @@ func (d *Database) GetAllGroups() ([]models.Group, error) {
 
 func (d *Database) GetAllUsers() ([]models.User, error) {
 	rows, err := d.db.Query(`
-		SELECT id, username, email, password, created_at, updated_at
-		FROM users
+		SELECT id, username, email, password, created, modified
+		FROM _users
 		ORDER BY username`)
 	if err != nil {
 		LogSQLError(err)
@@ -805,8 +811,8 @@ func (d *Database) GetAllUsers() ([]models.User, error) {
 func (d *Database) GetTableMetadata(tableName string) (*models.TableMetadata, error) {
 	var metadata models.TableMetadata
 	err := d.db.QueryRow(`
-		SELECT id, table_name, display_name, description, read_groups, write_groups, created_at, updated_at
-		FROM table_metadata WHERE table_name = ?`,
+		SELECT id, table_name, display_name, description, read_groups, write_groups, created, modified
+		FROM _table_metadata WHERE table_name = ?`,
 		tableName).Scan(
 		&metadata.ID, &metadata.TableName, &metadata.DisplayName, &metadata.Description,
 		&metadata.ReadGroups, &metadata.WriteGroups, &metadata.CreatedAt, &metadata.UpdatedAt)
@@ -820,8 +826,8 @@ func (d *Database) GetTableMetadata(tableName string) (*models.TableMetadata, er
 // GetAllTableMetadata retrieves metadata for all tables
 func (d *Database) GetAllTableMetadata() ([]models.TableMetadata, error) {
 	rows, err := d.db.Query(`
-		SELECT id, table_name, display_name, description, read_groups, write_groups, created_at, updated_at
-		FROM table_metadata ORDER BY table_name`)
+		SELECT id, table_name, display_name, description, read_groups, write_groups, created, modified
+		FROM _table_metadata ORDER BY table_name`)
 	if err != nil {
 		LogSQLError(err)
 		return nil, err
@@ -846,7 +852,7 @@ func (d *Database) GetAllTableMetadata() ([]models.TableMetadata, error) {
 // CreateTableMetadata creates new table metadata
 func (d *Database) CreateTableMetadata(metadata *models.TableMetadata) error {
 	_, err := d.db.Exec(`
-		INSERT INTO table_metadata (table_name, display_name, description, read_groups, write_groups)
+		INSERT INTO _table_metadata (table_name, display_name, description, read_groups, write_groups)
 		VALUES (?, ?, ?, ?, ?)`,
 		metadata.TableName, metadata.DisplayName, metadata.Description,
 		metadata.ReadGroups, metadata.WriteGroups)
@@ -860,7 +866,7 @@ func (d *Database) CreateTableMetadata(metadata *models.TableMetadata) error {
 // UpdateTableMetadata updates existing table metadata
 func (d *Database) UpdateTableMetadata(metadata *models.TableMetadata) error {
 	_, err := d.db.Exec(`
-		UPDATE table_metadata 
+		UPDATE _table_metadata 
 		SET display_name = ?, description = ?, read_groups = ?, write_groups = ?
 		WHERE table_name = ?`,
 		metadata.DisplayName, metadata.Description, metadata.ReadGroups, metadata.WriteGroups, metadata.TableName)
@@ -876,8 +882,8 @@ func (d *Database) GetFieldMetadata(tableName string) ([]models.FieldMetadata, e
 	rows, err := d.db.Query(`
 		SELECT id, table_name, field_name, display_name, description, db_type, html_input_type,
 		       form_position, list_position, is_required, is_read_only, default_value, validation_rules,
-		       created_at, updated_at
-		FROM field_metadata WHERE table_name = ? ORDER BY form_position, field_name`,
+		       created, modified
+		FROM _field_metadata WHERE table_name = ? ORDER BY form_position, field_name`,
 		tableName)
 	if err != nil {
 		LogSQLError(err)
@@ -908,8 +914,8 @@ func (d *Database) GetFieldMetadataByField(tableName, fieldName string) (*models
 	err := d.db.QueryRow(`
 		SELECT id, table_name, field_name, display_name, description, db_type, html_input_type,
 		       form_position, list_position, is_required, is_read_only, default_value, validation_rules,
-		       created_at, updated_at
-		FROM field_metadata WHERE table_name = ? AND field_name = ?`,
+		       created, modified
+		FROM _field_metadata WHERE table_name = ? AND field_name = ?`,
 		tableName, fieldName).Scan(
 		&metadata.ID, &metadata.TableName, &metadata.FieldName, &metadata.DisplayName, &metadata.Description,
 		&metadata.DBType, &metadata.HTMLInputType, &metadata.FormPosition, &metadata.ListPosition,
@@ -925,7 +931,7 @@ func (d *Database) GetFieldMetadataByField(tableName, fieldName string) (*models
 // CreateFieldMetadata creates new field metadata
 func (d *Database) CreateFieldMetadata(metadata *models.FieldMetadata) error {
 	_, err := d.db.Exec(`
-		INSERT INTO field_metadata (table_name, field_name, display_name, description, db_type, html_input_type,
+		INSERT INTO _field_metadata (table_name, field_name, display_name, description, db_type, html_input_type,
 		                           form_position, list_position, is_required, is_read_only, default_value, validation_rules)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		metadata.TableName, metadata.FieldName, metadata.DisplayName, metadata.Description,
@@ -941,7 +947,7 @@ func (d *Database) CreateFieldMetadata(metadata *models.FieldMetadata) error {
 // UpdateFieldMetadata updates existing field metadata
 func (d *Database) UpdateFieldMetadata(metadata *models.FieldMetadata) error {
 	_, err := d.db.Exec(`
-		UPDATE field_metadata 
+		UPDATE _field_metadata 
 		SET display_name = ?, description = ?, db_type = ?, html_input_type = ?,
 		    form_position = ?, list_position = ?, is_required = ?, is_read_only = ?,
 		    default_value = ?, validation_rules = ?
@@ -1165,7 +1171,7 @@ func (d *Database) GetTableSchema(tableName string) ([]string, error) {
 func (d *Database) initializeMetadata() error {
 	// Initialize metadata for users table
 	usersMetadata := &models.TableMetadata{
-		TableName:   "users",
+		TableName:   "_users",
 		DisplayName: "Users",
 		Description: "User accounts and authentication information",
 		ReadGroups:  `["admin"]`,
@@ -1180,7 +1186,7 @@ func (d *Database) initializeMetadata() error {
 	// Initialize field metadata for users table
 	usersFields := []models.FieldMetadata{
 		{
-			TableName:     "users",
+			TableName:     "_users",
 			FieldName:     "id",
 			DisplayName:   "ID",
 			Description:   "Unique identifier",
@@ -1192,7 +1198,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    true,
 		},
 		{
-			TableName:     "users",
+			TableName:     "_users",
 			FieldName:     "username",
 			DisplayName:   "Username",
 			Description:   "User login name",
@@ -1204,7 +1210,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    false,
 		},
 		{
-			TableName:     "users",
+			TableName:     "_users",
 			FieldName:     "email",
 			DisplayName:   "Email",
 			Description:   "User email address",
@@ -1216,7 +1222,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    false,
 		},
 		{
-			TableName:     "users",
+			TableName:     "_users",
 			FieldName:     "password",
 			DisplayName:   "Password",
 			Description:   "Hashed password",
@@ -1228,9 +1234,9 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    false,
 		},
 		{
-			TableName:     "users",
-			FieldName:     "created_at",
-			DisplayName:   "Created At",
+			TableName:     "_users",
+			FieldName:     "created",
+			DisplayName:   "Created",
 			Description:   "Account creation date",
 			DBType:        "TIMESTAMP",
 			HTMLInputType: "datetime-local",
@@ -1240,9 +1246,9 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    true,
 		},
 		{
-			TableName:     "users",
-			FieldName:     "updated_at",
-			DisplayName:   "Updated At",
+			TableName:     "_users",
+			FieldName:     "modified",
+			DisplayName:   "Modified",
 			Description:   "Last update date",
 			DBType:        "TIMESTAMP",
 			HTMLInputType: "datetime-local",
@@ -1262,7 +1268,7 @@ func (d *Database) initializeMetadata() error {
 
 	// Initialize metadata for pages table
 	pagesMetadata := &models.TableMetadata{
-		TableName:   "pages",
+		TableName:   "_page",
 		DisplayName: "Pages",
 		Description: "Content pages and templates",
 		ReadGroups:  `["admin", "customers"]`,
@@ -1277,7 +1283,7 @@ func (d *Database) initializeMetadata() error {
 	// Initialize field metadata for pages table
 	pagesFields := []models.FieldMetadata{
 		{
-			TableName:     "pages",
+			TableName:     "_page",
 			FieldName:     "id",
 			DisplayName:   "ID",
 			Description:   "Unique identifier",
@@ -1289,7 +1295,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    true,
 		},
 		{
-			TableName:     "pages",
+			TableName:     "_page",
 			FieldName:     "slug",
 			DisplayName:   "Slug",
 			Description:   "URL-friendly identifier",
@@ -1301,7 +1307,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    false,
 		},
 		{
-			TableName:     "pages",
+			TableName:     "_page",
 			FieldName:     "title",
 			DisplayName:   "Title",
 			Description:   "Page title",
@@ -1313,7 +1319,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    false,
 		},
 		{
-			TableName:     "pages",
+			TableName:     "_page",
 			FieldName:     "meta_description",
 			DisplayName:   "Meta Description",
 			Description:   "SEO meta description",
@@ -1325,7 +1331,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    false,
 		},
 		{
-			TableName:     "pages",
+			TableName:     "_page",
 			FieldName:     "header",
 			DisplayName:   "Header",
 			Description:   "Page header content",
@@ -1337,7 +1343,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    false,
 		},
 		{
-			TableName:     "pages",
+			TableName:     "_page",
 			FieldName:     "navigation",
 			DisplayName:   "Navigation",
 			Description:   "Navigation menu HTML",
@@ -1349,7 +1355,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    false,
 		},
 		{
-			TableName:     "pages",
+			TableName:     "_page",
 			FieldName:     "main_content",
 			DisplayName:   "Main Content",
 			Description:   "Main page content",
@@ -1361,7 +1367,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    false,
 		},
 		{
-			TableName:     "pages",
+			TableName:     "_page",
 			FieldName:     "sidebar",
 			DisplayName:   "Sidebar",
 			Description:   "Sidebar content",
@@ -1373,7 +1379,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    false,
 		},
 		{
-			TableName:     "pages",
+			TableName:     "_page",
 			FieldName:     "footer",
 			DisplayName:   "Footer",
 			Description:   "Footer content",
@@ -1385,7 +1391,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    false,
 		},
 		{
-			TableName:     "pages",
+			TableName:     "_page",
 			FieldName:     "css_class",
 			DisplayName:   "CSS Class",
 			Description:   "CSS class for styling",
@@ -1397,7 +1403,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    false,
 		},
 		{
-			TableName:     "pages",
+			TableName:     "_page",
 			FieldName:     "scripts",
 			DisplayName:   "Scripts",
 			Description:   "JavaScript code",
@@ -1409,7 +1415,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    false,
 		},
 		{
-			TableName:     "pages",
+			TableName:     "_page",
 			FieldName:     "template",
 			DisplayName:   "Template",
 			Description:   "Template name",
@@ -1419,6 +1425,30 @@ func (d *Database) initializeMetadata() error {
 			ListPosition:  4,
 			IsRequired:    false,
 			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_page",
+			FieldName:     "created",
+			DisplayName:   "Created",
+			Description:   "Page creation date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  12,
+			ListPosition:  5,
+			IsRequired:    false,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     "_page",
+			FieldName:     "modified",
+			DisplayName:   "Modified",
+			Description:   "Last update date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  13,
+			ListPosition:  6,
+			IsRequired:    false,
+			IsReadOnly:    true,
 		},
 	}
 
@@ -1436,7 +1466,7 @@ func (d *Database) initializeMetadata() error {
 func (d *Database) createTableMetadataIfNotExists(metadata *models.TableMetadata) error {
 	// Check if metadata exists
 	var count int
-	err := d.db.QueryRow("SELECT COUNT(*) FROM table_metadata WHERE table_name = ?", metadata.TableName).Scan(&count)
+	err := d.db.QueryRow("SELECT COUNT(*) FROM _table_metadata WHERE table_name = ?", metadata.TableName).Scan(&count)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -1456,7 +1486,7 @@ func (d *Database) createTableMetadataIfNotExists(metadata *models.TableMetadata
 func (d *Database) createFieldMetadataIfNotExists(metadata *models.FieldMetadata) error {
 	// Check if metadata exists
 	var count int
-	err := d.db.QueryRow("SELECT COUNT(*) FROM field_metadata WHERE table_name = ? AND field_name = ?", 
+	err := d.db.QueryRow("SELECT COUNT(*) FROM _field_metadata WHERE table_name = ? AND field_name = ?", 
 		metadata.TableName, metadata.FieldName).Scan(&count)
 	if err != nil {
 		LogSQLError(err)

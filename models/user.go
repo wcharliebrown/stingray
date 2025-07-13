@@ -10,14 +10,14 @@ type User struct {
 	Email     string
 	Password  string
 	CreatedAt time.Time
-	UpdatedAt time.Time
+	UpdatedAt time.Time // This will map to 'modified' in the database
 }
 
 type Group struct {
 	ID          int
 	Name        string
 	Description string
-	CreatedAt   time.Time
+	CreatedAt   time.Time // This will map to 'created' in the database
 }
 
 type UserGroup struct {
