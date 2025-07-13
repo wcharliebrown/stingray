@@ -187,7 +187,24 @@ func (d *Database) initDatabase() error {
 		return err
 	}
 
-	return d.initializeMetadata()
+	if err := d.initializeMetadata(); err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Update existing metadata to include engineer group access
+	if err := d.updateExistingMetadataForEngineer(); err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Update existing metadata to include everyone group access
+	if err := d.updateExistingMetadataForEveryone(); err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	return nil
 }
 
 func (d *Database) initializePages() error {
@@ -446,6 +463,8 @@ func (d *Database) initializeUsers() error {
 	groups := []models.Group{
 		{Name: "admin", Description: "Administrator group with full access"},
 		{Name: "customers", Description: "Customer group with limited access"},
+		{Name: "engineer", Description: "Engineer group with technical access"},
+		{Name: "everyone", Description: "Special group that includes all users including unauthenticated users"},
 	}
 
 	for _, group := range groups {
@@ -476,6 +495,14 @@ func (d *Database) initializeUsers() error {
 			},
 			groups: []string{"customers"},
 		},
+		{
+			user: models.User{
+				Username: "engineer",
+				Email:    "engineeruser@servicecompany.net",
+				Password: "", // Will be set below
+			},
+			groups: []string{"engineer"},
+		},
 	}
 
 	for _, userData := range users {
@@ -483,8 +510,13 @@ func (d *Database) initializeUsers() error {
 		var plainPassword string
 		if userData.user.Username == "admin" {
 			plainPassword = os.Getenv("TEST_ADMIN_PASSWORD")
-		} else {
+		} else if userData.user.Username == "customer" {
 			plainPassword = os.Getenv("TEST_CUSTOMER_PASSWORD")
+		} else if userData.user.Username == "engineer" {
+			plainPassword = os.Getenv("TEST_ENGINEER_PASSWORD")
+			if plainPassword == "" {
+				plainPassword = "engineer" // Default password if not set in environment
+			}
 		}
 		
 		// Hash the password before storing
@@ -1174,8 +1206,8 @@ func (d *Database) initializeMetadata() error {
 		TableName:   "_user",
 		DisplayName: "Users",
 		Description: "User accounts and authentication information",
-		ReadGroups:  `["admin"]`,
-		WriteGroups: `["admin"]`,
+		ReadGroups:  `["admin", "engineer"]`,
+		WriteGroups: `["admin", "engineer"]`,
 	}
 
 	if err := d.createTableMetadataIfNotExists(usersMetadata); err != nil {
@@ -1271,8 +1303,8 @@ func (d *Database) initializeMetadata() error {
 		TableName:   "_page",
 		DisplayName: "Pages",
 		Description: "Content pages and templates",
-		ReadGroups:  `["admin", "customers"]`,
-		WriteGroups: `["admin"]`,
+		ReadGroups:  `["admin", "customers", "engineer", "everyone"]`,
+		WriteGroups: `["admin", "engineer"]`,
 	}
 
 	if err := d.createTableMetadataIfNotExists(pagesMetadata); err != nil {
@@ -1456,6 +1488,699 @@ func (d *Database) initializeMetadata() error {
 		if err := d.createFieldMetadataIfNotExists(&field); err != nil {
 			LogSQLError(err)
 			return err
+		}
+	}
+
+	// Initialize metadata for groups table
+	groupsMetadata := &models.TableMetadata{
+		TableName:   "_group",
+		DisplayName: "Groups",
+		Description: "User groups for role-based access control",
+		ReadGroups:  `["admin", "engineer"]`,
+		WriteGroups: `["admin", "engineer"]`,
+	}
+
+	if err := d.createTableMetadataIfNotExists(groupsMetadata); err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Initialize field metadata for groups table
+	groupsFields := []models.FieldMetadata{
+		{
+			TableName:     "_group",
+			FieldName:     "id",
+			DisplayName:   "ID",
+			Description:   "Unique identifier",
+			DBType:        "INT",
+			HTMLInputType: "number",
+			FormPosition:  0,
+			ListPosition:  0,
+			IsRequired:    true,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     "_group",
+			FieldName:     "name",
+			DisplayName:   "Name",
+			Description:   "Group name",
+			DBType:        "VARCHAR",
+			HTMLInputType: "text",
+			FormPosition:  1,
+			ListPosition:  1,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_group",
+			FieldName:     "description",
+			DisplayName:   "Description",
+			Description:   "Group description",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  2,
+			ListPosition:  2,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_group",
+			FieldName:     "created",
+			DisplayName:   "Created",
+			Description:   "Group creation date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  3,
+			ListPosition:  3,
+			IsRequired:    false,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     "_group",
+			FieldName:     "modified",
+			DisplayName:   "Modified",
+			Description:   "Last update date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  4,
+			ListPosition:  4,
+			IsRequired:    false,
+			IsReadOnly:    true,
+		},
+	}
+
+	for _, field := range groupsFields {
+		if err := d.createFieldMetadataIfNotExists(&field); err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	// Initialize metadata for user_and_group table
+	userGroupsMetadata := &models.TableMetadata{
+		TableName:   "_user_and_group",
+		DisplayName: "User Groups",
+		Description: "User-group relationships for role assignment",
+		ReadGroups:  `["admin", "engineer"]`,
+		WriteGroups: `["admin", "engineer"]`,
+	}
+
+	if err := d.createTableMetadataIfNotExists(userGroupsMetadata); err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Initialize field metadata for user_and_group table
+	userGroupsFields := []models.FieldMetadata{
+		{
+			TableName:     "_user_and_group",
+			FieldName:     "id",
+			DisplayName:   "ID",
+			Description:   "Unique identifier",
+			DBType:        "INT",
+			HTMLInputType: "number",
+			FormPosition:  0,
+			ListPosition:  0,
+			IsRequired:    true,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     "_user_and_group",
+			FieldName:     "user_id",
+			DisplayName:   "User ID",
+			Description:   "User identifier",
+			DBType:        "INT",
+			HTMLInputType: "number",
+			FormPosition:  1,
+			ListPosition:  1,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_user_and_group",
+			FieldName:     "group_id",
+			DisplayName:   "Group ID",
+			Description:   "Group identifier",
+			DBType:        "INT",
+			HTMLInputType: "number",
+			FormPosition:  2,
+			ListPosition:  2,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_user_and_group",
+			FieldName:     "created",
+			DisplayName:   "Created",
+			Description:   "Relationship creation date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  3,
+			ListPosition:  3,
+			IsRequired:    false,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     "_user_and_group",
+			FieldName:     "modified",
+			DisplayName:   "Modified",
+			Description:   "Last update date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  4,
+			ListPosition:  4,
+			IsRequired:    false,
+			IsReadOnly:    true,
+		},
+	}
+
+	for _, field := range userGroupsFields {
+		if err := d.createFieldMetadataIfNotExists(&field); err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	// Initialize metadata for sessions table
+	sessionsMetadata := &models.TableMetadata{
+		TableName:   "_session",
+		DisplayName: "Sessions",
+		Description: "User session information",
+		ReadGroups:  `["admin", "engineer"]`,
+		WriteGroups: `["admin", "engineer"]`,
+	}
+
+	if err := d.createTableMetadataIfNotExists(sessionsMetadata); err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Initialize field metadata for sessions table
+	sessionsFields := []models.FieldMetadata{
+		{
+			TableName:     "_session",
+			FieldName:     "id",
+			DisplayName:   "ID",
+			Description:   "Unique identifier",
+			DBType:        "INT",
+			HTMLInputType: "number",
+			FormPosition:  0,
+			ListPosition:  0,
+			IsRequired:    true,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     "_session",
+			FieldName:     "session_id",
+			DisplayName:   "Session ID",
+			Description:   "Session identifier",
+			DBType:        "VARCHAR",
+			HTMLInputType: "text",
+			FormPosition:  1,
+			ListPosition:  1,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_session",
+			FieldName:     "user_id",
+			DisplayName:   "User ID",
+			Description:   "User identifier",
+			DBType:        "INT",
+			HTMLInputType: "number",
+			FormPosition:  2,
+			ListPosition:  2,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_session",
+			FieldName:     "username",
+			DisplayName:   "Username",
+			Description:   "Username",
+			DBType:        "VARCHAR",
+			HTMLInputType: "text",
+			FormPosition:  3,
+			ListPosition:  3,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_session",
+			FieldName:     "created",
+			DisplayName:   "Created",
+			Description:   "Session creation date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  4,
+			ListPosition:  4,
+			IsRequired:    false,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     "_session",
+			FieldName:     "modified",
+			DisplayName:   "Modified",
+			Description:   "Last update date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  5,
+			ListPosition:  5,
+			IsRequired:    false,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     "_session",
+			FieldName:     "expires_at",
+			DisplayName:   "Expires At",
+			Description:   "Session expiration date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  6,
+			ListPosition:  6,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_session",
+			FieldName:     "is_active",
+			DisplayName:   "Is Active",
+			Description:   "Whether session is active",
+			DBType:        "BOOLEAN",
+			HTMLInputType: "checkbox",
+			FormPosition:  7,
+			ListPosition:  7,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+	}
+
+	for _, field := range sessionsFields {
+		if err := d.createFieldMetadataIfNotExists(&field); err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	// Initialize metadata for table_metadata table
+	tableMetadataMetadata := &models.TableMetadata{
+		TableName:   "_table_metadata",
+		DisplayName: "Table Metadata",
+		Description: "Metadata for database tables",
+		ReadGroups:  `["admin", "engineer"]`,
+		WriteGroups: `["admin", "engineer"]`,
+	}
+
+	if err := d.createTableMetadataIfNotExists(tableMetadataMetadata); err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Initialize field metadata for table_metadata table
+	tableMetadataFields := []models.FieldMetadata{
+		{
+			TableName:     "_table_metadata",
+			FieldName:     "id",
+			DisplayName:   "ID",
+			Description:   "Unique identifier",
+			DBType:        "INT",
+			HTMLInputType: "number",
+			FormPosition:  0,
+			ListPosition:  0,
+			IsRequired:    true,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     "_table_metadata",
+			FieldName:     "table_name",
+			DisplayName:   "Table Name",
+			Description:   "Database table name",
+			DBType:        "VARCHAR",
+			HTMLInputType: "text",
+			FormPosition:  1,
+			ListPosition:  1,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_table_metadata",
+			FieldName:     "display_name",
+			DisplayName:   "Display Name",
+			Description:   "Human-readable table name",
+			DBType:        "VARCHAR",
+			HTMLInputType: "text",
+			FormPosition:  2,
+			ListPosition:  2,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_table_metadata",
+			FieldName:     "description",
+			DisplayName:   "Description",
+			Description:   "Table description",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  3,
+			ListPosition:  3,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_table_metadata",
+			FieldName:     "read_groups",
+			DisplayName:   "Read Groups",
+			Description:   "JSON array of groups that can read this table",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  4,
+			ListPosition:  4,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_table_metadata",
+			FieldName:     "write_groups",
+			DisplayName:   "Write Groups",
+			Description:   "JSON array of groups that can write to this table",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  5,
+			ListPosition:  5,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_table_metadata",
+			FieldName:     "created",
+			DisplayName:   "Created",
+			Description:   "Metadata creation date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  6,
+			ListPosition:  6,
+			IsRequired:    false,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     "_table_metadata",
+			FieldName:     "modified",
+			DisplayName:   "Modified",
+			Description:   "Last update date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  7,
+			ListPosition:  7,
+			IsRequired:    false,
+			IsReadOnly:    true,
+		},
+	}
+
+	for _, field := range tableMetadataFields {
+		if err := d.createFieldMetadataIfNotExists(&field); err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	// Initialize metadata for field_metadata table
+	fieldMetadataMetadata := &models.TableMetadata{
+		TableName:   "_field_metadata",
+		DisplayName: "Field Metadata",
+		Description: "Metadata for database table fields",
+		ReadGroups:  `["admin", "engineer"]`,
+		WriteGroups: `["admin", "engineer"]`,
+	}
+
+	if err := d.createTableMetadataIfNotExists(fieldMetadataMetadata); err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Initialize field metadata for field_metadata table
+	fieldMetadataFields := []models.FieldMetadata{
+		{
+			TableName:     "_field_metadata",
+			FieldName:     "id",
+			DisplayName:   "ID",
+			Description:   "Unique identifier",
+			DBType:        "INT",
+			HTMLInputType: "number",
+			FormPosition:  0,
+			ListPosition:  0,
+			IsRequired:    true,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     "_field_metadata",
+			FieldName:     "table_name",
+			DisplayName:   "Table Name",
+			Description:   "Database table name",
+			DBType:        "VARCHAR",
+			HTMLInputType: "text",
+			FormPosition:  1,
+			ListPosition:  1,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_field_metadata",
+			FieldName:     "field_name",
+			DisplayName:   "Field Name",
+			Description:   "Database field name",
+			DBType:        "VARCHAR",
+			HTMLInputType: "text",
+			FormPosition:  2,
+			ListPosition:  2,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_field_metadata",
+			FieldName:     "display_name",
+			DisplayName:   "Display Name",
+			Description:   "Human-readable field name",
+			DBType:        "VARCHAR",
+			HTMLInputType: "text",
+			FormPosition:  3,
+			ListPosition:  3,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_field_metadata",
+			FieldName:     "description",
+			DisplayName:   "Description",
+			Description:   "Field description",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  4,
+			ListPosition:  4,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_field_metadata",
+			FieldName:     "db_type",
+			DisplayName:   "DB Type",
+			Description:   "Database field type",
+			DBType:        "VARCHAR",
+			HTMLInputType: "text",
+			FormPosition:  5,
+			ListPosition:  5,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_field_metadata",
+			FieldName:     "html_input_type",
+			DisplayName:   "HTML Input Type",
+			Description:   "HTML input type for forms",
+			DBType:        "VARCHAR",
+			HTMLInputType: "text",
+			FormPosition:  6,
+			ListPosition:  6,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_field_metadata",
+			FieldName:     "form_position",
+			DisplayName:   "Form Position",
+			Description:   "Position in edit form",
+			DBType:        "INT",
+			HTMLInputType: "number",
+			FormPosition:  7,
+			ListPosition:  7,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_field_metadata",
+			FieldName:     "list_position",
+			DisplayName:   "List Position",
+			Description:   "Position in table listing",
+			DBType:        "INT",
+			HTMLInputType: "number",
+			FormPosition:  8,
+			ListPosition:  8,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_field_metadata",
+			FieldName:     "is_required",
+			DisplayName:   "Is Required",
+			Description:   "Whether field is required",
+			DBType:        "BOOLEAN",
+			HTMLInputType: "checkbox",
+			FormPosition:  9,
+			ListPosition:  9,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_field_metadata",
+			FieldName:     "is_read_only",
+			DisplayName:   "Is Read Only",
+			Description:   "Whether field is read-only",
+			DBType:        "BOOLEAN",
+			HTMLInputType: "checkbox",
+			FormPosition:  10,
+			ListPosition:  10,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_field_metadata",
+			FieldName:     "default_value",
+			DisplayName:   "Default Value",
+			Description:   "Default value for the field",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  11,
+			ListPosition:  11,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_field_metadata",
+			FieldName:     "validation_rules",
+			DisplayName:   "Validation Rules",
+			Description:   "JSON string with validation rules",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  12,
+			ListPosition:  12,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_field_metadata",
+			FieldName:     "created",
+			DisplayName:   "Created",
+			Description:   "Metadata creation date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  13,
+			ListPosition:  13,
+			IsRequired:    false,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     "_field_metadata",
+			FieldName:     "modified",
+			DisplayName:   "Modified",
+			Description:   "Last update date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  14,
+			ListPosition:  14,
+			IsRequired:    false,
+			IsReadOnly:    true,
+		},
+	}
+
+	for _, field := range fieldMetadataFields {
+		if err := d.createFieldMetadataIfNotExists(&field); err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// updateExistingMetadataForEngineer updates existing metadata to include engineer group access
+func (d *Database) updateExistingMetadataForEngineer() error {
+	// Tables that should be accessible to engineers
+	engineerTables := []string{"_user", "_group", "_user_and_group", "_session", "_table_metadata", "_field_metadata", "_page"}
+	
+	for _, tableName := range engineerTables {
+		// Update read groups to include engineer
+		if tableName == "_page" {
+			// Special handling for pages table - add engineer and everyone to existing read groups
+			_, err := d.db.Exec(`
+				UPDATE _table_metadata 
+				SET read_groups = '["admin", "customers", "engineer", "everyone"]'
+				WHERE table_name = ? AND read_groups = '["admin", "customers"]'`,
+				tableName)
+			if err != nil {
+				LogSQLError(err)
+				return err
+			}
+		} else {
+			// Standard handling for other tables
+			_, err := d.db.Exec(`
+				UPDATE _table_metadata 
+				SET read_groups = '["admin", "engineer"]'
+				WHERE table_name = ? AND read_groups = '["admin"]'`,
+				tableName)
+			if err != nil {
+				LogSQLError(err)
+				return err
+			}
+		}
+		
+		// Update write groups to include engineer
+		_, err := d.db.Exec(`
+			UPDATE _table_metadata 
+			SET write_groups = '["admin", "engineer"]'
+			WHERE table_name = ? AND write_groups = '["admin"]'`,
+			tableName)
+		if err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// updateExistingMetadataForEveryone updates existing metadata to include everyone group access
+func (d *Database) updateExistingMetadataForEveryone() error {
+	// Get all table metadata
+	tableMetadata, err := d.GetAllTableMetadata()
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	for _, table := range tableMetadata {
+		tableName := table.TableName
+		
+		// Update read groups to include everyone for pages table
+		if tableName == "_page" {
+			// Special handling for pages table - add everyone to existing read groups
+			_, err := d.db.Exec(`
+				UPDATE _table_metadata 
+				SET read_groups = '["admin", "customers", "engineer", "everyone"]'
+				WHERE table_name = ? AND read_groups NOT LIKE '%everyone%'`,
+				tableName)
+			if err != nil {
+				LogSQLError(err)
+				return err
+			}
 		}
 	}
 

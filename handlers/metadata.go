@@ -27,12 +27,6 @@ func NewMetadataHandler(db *database.Database) *MetadataHandler {
 
 // HandleTableList handles the table listing page
 func (h *MetadataHandler) HandleTableList(w http.ResponseWriter, r *http.Request) {
-	// Check if user is authenticated
-	if !h.sm.IsAuthenticated(r) {
-		http.Redirect(w, r, "/user/login", http.StatusSeeOther)
-		return
-	}
-
 	// Get all table metadata
 	tableMetadata, err := h.db.GetAllTableMetadata()
 	if err != nil {
@@ -41,10 +35,58 @@ func (h *MetadataHandler) HandleTableList(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Check if user is authenticated
+	isAuthenticated := h.sm.IsAuthenticated(r)
+	var userID int
+	if isAuthenticated {
+		session, err := h.sm.GetSessionFromRequest(r)
+		if err == nil {
+			userID = session.UserID
+		}
+	}
+
+	// Filter tables based on user access
+	var accessibleTables []models.TableMetadata
+	for _, table := range tableMetadata {
+		hasAccess := false
+		
+		// Parse read groups
+		var readGroups []string
+		if table.ReadGroups != "" {
+			if err := json.Unmarshal([]byte(table.ReadGroups), &readGroups); err != nil {
+				continue
+			}
+		}
+
+		// Check access
+		if len(readGroups) == 0 {
+			hasAccess = true // No restrictions
+		} else {
+			for _, group := range readGroups {
+				// Everyone is automatically in the 'everyone' group
+				if group == "everyone" {
+					hasAccess = true
+					break
+				}
+				// For authenticated users, check their groups
+				if isAuthenticated {
+					if inGroup, _ := h.db.IsUserInGroup(userID, group); inGroup {
+						hasAccess = true
+						break
+					}
+				}
+			}
+		}
+
+		if hasAccess {
+			accessibleTables = append(accessibleTables, table)
+		}
+	}
+
 	// Check if JSON response is requested
 	if r.URL.Query().Get("response_format") == "json" {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(tableMetadata)
+		json.NewEncoder(w).Encode(accessibleTables)
 		return
 	}
 
@@ -101,17 +143,11 @@ func (h *MetadataHandler) HandleTableList(w http.ResponseWriter, r *http.Request
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	t.Execute(w, tableMetadata)
+	t.Execute(w, accessibleTables)
 }
 
 // HandleTableData handles viewing table data
 func (h *MetadataHandler) HandleTableData(w http.ResponseWriter, r *http.Request) {
-	// Check if user is authenticated
-	if !h.sm.IsAuthenticated(r) {
-		http.Redirect(w, r, "/user/login", http.StatusSeeOther)
-		return
-	}
-
 	// Extract table name from URL
 	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/metadata/table/"), "/")
 	if len(pathParts) == 0 {
@@ -128,13 +164,17 @@ func (h *MetadataHandler) HandleTableData(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Check user permissions
-	session, err := h.sm.GetSessionFromRequest(r)
-	if err != nil {
-		http.Error(w, "User not authenticated", http.StatusUnauthorized)
-		return
+	// Check if user is authenticated
+	isAuthenticated := h.sm.IsAuthenticated(r)
+	var userID int
+	if isAuthenticated {
+		session, err := h.sm.GetSessionFromRequest(r)
+		if err != nil {
+			http.Error(w, "User not authenticated", http.StatusUnauthorized)
+			return
+		}
+		userID = session.UserID
 	}
-	userID := session.UserID
 
 	// Parse read groups
 	var readGroups []string
@@ -151,9 +191,17 @@ func (h *MetadataHandler) HandleTableData(w http.ResponseWriter, r *http.Request
 		hasAccess = true // No restrictions
 	} else {
 		for _, group := range readGroups {
-			if inGroup, _ := h.db.IsUserInGroup(userID, group); inGroup {
+			// Everyone is automatically in the 'everyone' group
+			if group == "everyone" {
 				hasAccess = true
 				break
+			}
+			// For authenticated users, check their groups
+			if isAuthenticated {
+				if inGroup, _ := h.db.IsUserInGroup(userID, group); inGroup {
+					hasAccess = true
+					break
+				}
 			}
 		}
 	}
@@ -207,11 +255,21 @@ func (h *MetadataHandler) HandleTableData(w http.ResponseWriter, r *http.Request
 		canCreate = true
 	} else {
 		for _, group := range writeGroups {
-			if inGroup, _ := h.db.IsUserInGroup(userID, group); inGroup {
+			// Everyone is automatically in the 'everyone' group
+			if group == "everyone" {
 				canEdit = true
 				canDelete = true
 				canCreate = true
 				break
+			}
+			// For authenticated users, check their groups
+			if isAuthenticated {
+				if inGroup, _ := h.db.IsUserInGroup(userID, group); inGroup {
+					canEdit = true
+					canDelete = true
+					canCreate = true
+					break
+				}
 			}
 		}
 	}

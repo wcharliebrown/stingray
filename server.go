@@ -59,8 +59,8 @@ func NewServer(db *database.Database) *Server {
 	mux.HandleFunc("/api/current-user", apiHandler.HandleGetCurrentUser)
 
 	// Metadata routes
-	mux.HandleFunc("/metadata/tables", sessionMW.RequireAuth(server.metadataHandler.HandleTableList))
-	mux.HandleFunc("/metadata/table/", sessionMW.RequireAuth(server.metadataHandler.HandleTableData))
+	mux.HandleFunc("/metadata/tables", server.metadataHandler.HandleTableList)
+	mux.HandleFunc("/metadata/table/", server.metadataHandler.HandleTableData)
 	mux.HandleFunc("/metadata/edit/", sessionMW.RequireAuth(server.metadataHandler.HandleEditRow))
 	mux.HandleFunc("/metadata/delete/", sessionMW.RequireAuth(server.metadataHandler.HandleDeleteRow))
 
