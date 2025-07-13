@@ -23,7 +23,7 @@ fi
 # Test 3: Test login with correct credentials
 echo "3. Testing login with correct credentials..."
 LOGIN_RESPONSE=$(curl -s -c cookies.txt -X POST http://localhost:6273/user/login_post \
-    -d "username=admin&password=password" \
+    -d "username=${TEST_ADMIN_USERNAME:-admin}&password=${TEST_ADMIN_PASSWORD:-admin}" \
     -H "Content-Type: application/x-www-form-urlencoded")
 
 if echo "$LOGIN_RESPONSE" | grep -q "Login Successful"; then

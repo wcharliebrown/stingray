@@ -138,7 +138,7 @@ Environment variables with defaults:
 - `MYSQL_HOST` (default: localhost)
 - `MYSQL_PORT` (default: 3306)
 - `MYSQL_USER` (default: root)
-- `MYSQL_PASSWORD` (default: password)
+- `MYSQL_PASSWORD` 
 - `MYSQL_DATABASE` (default: stingray)
 
 ## Implementation Details

@@ -4,6 +4,24 @@
 echo "Testing Sting Ray User Management System"
 echo "========================================"
 
+# Load environment variables from .env file if it exists
+if [ -f .env ]; then
+    echo "Loading environment variables from .env file..."
+    export $(grep -v '^#' .env | xargs)
+fi
+
+# Set default test credentials if not provided in environment
+export TEST_ADMIN_USERNAME=${TEST_ADMIN_USERNAME:-admin}
+export TEST_ADMIN_PASSWORD=${TEST_ADMIN_PASSWORD:-admin}
+export TEST_CUSTOMER_USERNAME=${TEST_CUSTOMER_USERNAME:-customer}
+export TEST_CUSTOMER_PASSWORD=${TEST_CUSTOMER_PASSWORD:-customer}
+export TEST_WRONG_PASSWORD=${TEST_WRONG_PASSWORD:-wrongpassword}
+
+echo "Using test credentials:"
+echo "  Admin: $TEST_ADMIN_USERNAME/$TEST_ADMIN_PASSWORD"
+echo "  Customer: $TEST_CUSTOMER_USERNAME/$TEST_CUSTOMER_PASSWORD"
+echo ""
+
 # Start the server in background
 echo "Starting server..."
 go run main.go &
@@ -19,19 +37,19 @@ echo "-------------------"
 # Test admin login
 echo "Testing admin login..."
 curl -s -X POST http://localhost:6273/user/login_post \
-  -d "username=admin&password=admin123" \
+  -d "username=$TEST_ADMIN_USERNAME&password=$TEST_ADMIN_PASSWORD" \
   -H "Content-Type: application/x-www-form-urlencoded" | grep -q "Login Successful" && echo "✓ Admin login successful" || echo "✗ Admin login failed"
 
 # Test customer login
 echo "Testing customer login..."
 curl -s -X POST http://localhost:6273/user/login_post \
-  -d "username=customer&password=customer123" \
+  -d "username=$TEST_CUSTOMER_USERNAME&password=$TEST_CUSTOMER_PASSWORD" \
   -H "Content-Type: application/x-www-form-urlencoded" | grep -q "Login Successful" && echo "✓ Customer login successful" || echo "✗ Customer login failed"
 
 # Test failed login
 echo "Testing failed login..."
 curl -s -X POST http://localhost:6273/user/login_post \
-  -d "username=admin&password=wrongpassword" \
+  -d "username=$TEST_ADMIN_USERNAME&password=$TEST_WRONG_PASSWORD" \
   -H "Content-Type: application/x-www-form-urlencoded" | grep -q "Invalid username or password" && echo "✓ Failed login handled correctly" || echo "✗ Failed login not handled correctly"
 
 echo ""
@@ -86,11 +104,11 @@ echo "-----------------------------"
 # Test that default users were created
 echo "Testing default user creation..."
 curl -s -X POST http://localhost:6273/user/login_post \
-  -d "username=admin&password=admin123" \
+  -d "username=$TEST_ADMIN_USERNAME&password=$TEST_ADMIN_PASSWORD" \
   -H "Content-Type: application/x-www-form-urlencoded" | grep -q "adminuser@servicecompany.net" && echo "✓ Admin user created with correct email" || echo "✗ Admin user not created correctly"
 
 curl -s -X POST http://localhost:6273/user/login_post \
-  -d "username=customer&password=customer123" \
+  -d "username=$TEST_CUSTOMER_USERNAME&password=$TEST_CUSTOMER_PASSWORD" \
   -H "Content-Type: application/x-www-form-urlencoded" | grep -q "customeruser@company.com" && echo "✓ Customer user created with correct email" || echo "✗ Customer user not created correctly"
 
 echo ""
@@ -99,8 +117,8 @@ echo "============"
 echo "All tests completed. Check the output above for any failures."
 echo ""
 echo "Default users created:"
-echo "- admin/admin123 (adminuser@servicecompany.net) - admin group"
-echo "- customer/customer123 (customeruser@company.com) - customers group"
+echo "- $TEST_ADMIN_USERNAME/$TEST_ADMIN_PASSWORD (adminuser@servicecompany.net) - admin group"
+echo "- $TEST_CUSTOMER_USERNAME/$TEST_CUSTOMER_PASSWORD (customeruser@company.com) - customers group"
 echo ""
 echo "Protected pages:"
 echo "- /page/orders - Admin only"

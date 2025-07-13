@@ -373,7 +373,7 @@ func (d *Database) initializeUsers() error {
 			user: models.User{
 				Username: "admin",
 				Email:    "adminuser@servicecompany.net",
-				Password: "admin123", // In production, this should be hashed
+				Password: os.Getenv("ADMIN_PASSWORD"), // In production, this should be hashed
 			},
 			groups: []string{"admin"},
 		},
@@ -381,7 +381,7 @@ func (d *Database) initializeUsers() error {
 			user: models.User{
 				Username: "customer",
 				Email:    "customeruser@company.com",
-				Password: "customer123", // In production, this should be hashed
+				Password: os.Getenv("CUSTOMER_PASSWORD"), // In production, this should be hashed
 			},
 			groups: []string{"customers"},
 		},

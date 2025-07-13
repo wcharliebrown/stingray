@@ -72,7 +72,7 @@ Session cookies are configured with:
 ### Login
 ```bash
 curl -X POST http://localhost:6273/user/login_post \
-  -d "username=admin&password=password" \
+  -d "username=admin&password=" \
   -H "Content-Type: application/x-www-form-urlencoded"
 ```
 
@@ -105,7 +105,7 @@ curl -b cookies.txt http://localhost:6273/user/logout
 ### Manual Testing
 1. Start the server: `go run main.go`
 2. Visit `http://localhost:6273/user/login`
-3. Login with `admin`/`password`
+3. Login with `admin` and password from env file
 4. Verify session cookie is set
 5. Access protected pages
 6. Test logout functionality

@@ -68,8 +68,9 @@ The application uses MySQL for data storage. See [MYSQL_SETUP.md](MYSQL_SETUP.md
 
 ### Environment Variables
 
-Configure the application using environment variables:
+Configure the application using environment variables. You can either set them directly or use a `.env` file:
 
+#### Option 1: Direct Environment Variables
 ```bash
 export MYSQL_HOST=localhost
 export MYSQL_PORT=3306
@@ -77,6 +78,26 @@ export MYSQL_USER=root
 export MYSQL_PASSWORD=don't forget to set this :-)
 export MYSQL_DATABASE=stingray
 ```
+
+#### Option 2: Using .env File (Recommended)
+1. Copy the example configuration:
+   ```bash
+   ./setup_env.sh
+   ```
+2. Edit the `.env` file to set your database credentials and test passwords
+3. The application will automatically load the `.env` file
+
+#### Test Credentials
+For testing purposes, you can configure test user credentials in your `.env` file:
+```bash
+TEST_ADMIN_USERNAME=admin
+TEST_ADMIN_PASSWORD=see .env file
+TEST_CUSTOMER_USERNAME=customer
+TEST_CUSTOMER_PASSWORD=see .env file
+TEST_WRONG_PASSWORD=see .env file
+```
+
+**Security Note**: Change the default test passwords in production environments!
 
 ## Usage
 
@@ -138,9 +159,6 @@ The system includes a complete user management system:
 - **User Groups**: Role-based access control with groups
 - **Default Users**: Pre-configured admin and customer accounts
 
-Default credentials:
-- Admin: `admin/admin123`
-- Customer: `customer/customer123`
 
 ### Database Features
 
@@ -164,6 +182,22 @@ Or use the Makefile:
 ```bash
 make test
 ```
+
+#### User System Testing
+Test the user management system with secure credentials:
+
+```bash
+./test_user_system.sh
+```
+
+This script will:
+- Load test credentials from environment variables or `.env` file
+- Test login functionality for admin and customer users
+- Verify role-based access control
+- Test API endpoints with proper authentication
+- Clean up after testing
+
+**Security**: The test script now uses environment variables instead of hardcoded passwords!
 
 ### Building
 

@@ -1,8 +1,10 @@
 package config
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -11,15 +13,57 @@ type Config struct {
 	MySQLUser     string
 	MySQLPassword string
 	MySQLDatabase string
+	// Test user credentials
+	TestAdminUsername    string
+	TestAdminPassword    string
+	TestCustomerUsername string
+	TestCustomerPassword string
+	TestWrongPassword    string
 }
 
 func LoadConfig() *Config {
+	// Load .env file if it exists
+	loadEnvFile(".env")
+	
 	return &Config{
-		MySQLHost:     getEnv("MYSQL_HOST", "localhost"),
-		MySQLPort:     getEnv("MYSQL_PORT", "3306"),
-		MySQLUser:     getEnv("MYSQL_USER", "root"),
-		MySQLPassword: getEnv("MYSQL_PASSWORD", "password"),
-		MySQLDatabase: getEnv("MYSQL_DATABASE", "stingray"),
+		MySQLHost:     os.Getenv("MYSQL_HOST"),
+		MySQLPort:     os.Getenv("MYSQL_PORT"),
+		MySQLUser:     os.Getenv("MYSQL_USER"),
+		MySQLPassword: os.Getenv("MYSQL_PASSWORD"),
+		MySQLDatabase: os.Getenv("MYSQL_DATABASE"),
+		// Test user credentials
+		TestAdminUsername:    getEnv("TEST_ADMIN_USERNAME", "admin"),
+		TestAdminPassword:    getEnv("TEST_ADMIN_PASSWORD", "admin"),
+		TestCustomerUsername: getEnv("TEST_CUSTOMER_USERNAME", "customer"),
+		TestCustomerPassword: getEnv("TEST_CUSTOMER_PASSWORD", "customer"),
+		TestWrongPassword:    getEnv("TEST_WRONG_PASSWORD", "wrongpassword"),
+	}
+}
+
+func loadEnvFile(filename string) {
+	file, err := os.Open(filename)
+	if err != nil {
+		// File doesn't exist, that's okay
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+			// Only set if not already set in environment
+			if os.Getenv(key) == "" {
+				os.Setenv(key, value)
+			}
+		}
 	}
 }
 

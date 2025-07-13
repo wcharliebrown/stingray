@@ -197,7 +197,7 @@ func TestLoginHandler(t *testing.T) {
 	// Test successful login
 	formData := url.Values{}
 	formData.Set("username", "admin")
-	formData.Set("password", "admin123")
+	formData.Set("password", os.Getenv("ADMIN_PASSWORD"))
 
 	req := httptest.NewRequest("POST", "/user/login_post", strings.NewReader(formData.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")

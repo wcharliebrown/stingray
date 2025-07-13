@@ -13,8 +13,8 @@ I have successfully implemented a comprehensive user and group management system
 - **Sessions Table**: Updated to use integer user_id with foreign key constraints
 
 ### 2. Default Users Created
-- **Admin User**: `admin` / `admin123` (adminuser@servicecompany.net) - admin group
-- **Customer User**: `customer` / `customer123` (customeruser@company.com) - customers group
+- **Admin User**: `admin` (adminuser@servicecompany.net) - admin group
+- **Customer User**: `customer` (customeruser@company.com) - customers group
 
 ### 3. Role-Based Access Control
 - **Admin Group**: Full access to all pages and API endpoints
@@ -191,7 +191,7 @@ The test script verifies:
 ### Login
 ```bash
 curl -X POST http://localhost:6273/user/login_post \
-  -d "username=admin&password=admin123" \
+  -d "username=admin&password=" \
   -H "Content-Type: application/x-www-form-urlencoded"
 ```
 

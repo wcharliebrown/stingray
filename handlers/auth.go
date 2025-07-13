@@ -74,7 +74,7 @@ func (h *AuthHandler) HandleLoginPost(w http.ResponseWriter, r *http.Request) {
 		data.MetaDescription = "Login failed"
 		data.Header = "Login Failed"
 		data.HeaderClass = "error"
-		data.Message = "Invalid username or password. Try admin/admin123 or customer/customer123."
+		data.Message = "Invalid username or password."
 		data.ButtonURL = "/user/login"
 		data.ButtonText = "Try Again"
 	} else {

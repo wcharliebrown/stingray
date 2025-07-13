@@ -51,13 +51,13 @@ On startup, the system creates two default users:
 ### Admin User
 - **Username**: `admin`
 - **Email**: `adminuser@servicecompany.net`
-- **Password**: `admin123`
+- **Password**: `see .env file`
 - **Groups**: `admin`
 
 ### Customer User
 - **Username**: `customer`
 - **Email**: `customeruser@company.com`
-- **Password**: `customer123`
+- **Password**: `see .env file`
 - **Groups**: `customers`
 
 ## Default Groups
@@ -256,7 +256,7 @@ The test script verifies:
 ### Login
 ```bash
 curl -X POST http://localhost:6273/user/login_post \
-  -d "username=admin&password=admin123" \
+  -d "username=admin&password=see .env file" \
   -H "Content-Type: application/x-www-form-urlencoded"
 ```
 
