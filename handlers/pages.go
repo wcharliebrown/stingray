@@ -86,10 +86,24 @@ func (h *PageHandler) HandlePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page, err := h.db.GetPage(path)
+	// Get user ID for permission checking
+	var userID int
+	if h.sm.IsAuthenticated(r) {
+		session, err := h.sm.GetSessionFromRequest(r)
+		if err == nil {
+			userID = session.UserID
+		}
+	}
+
+	// Get page with permission check
+	page, err := h.db.GetPageWithPermissionCheck(path, userID)
 	if err != nil {
 		database.LogSQLError(err)
-		RenderMessage(w, "404 Not Found", "Page Not Found", "error", "The page you requested does not exist.", "/", "Go Home", http.StatusNotFound)
+		if err.Error() == "access denied" {
+			RenderMessage(w, "403 Forbidden", "Access Denied", "error", "You do not have permission to access this page.", "/", "Go Home", http.StatusForbidden)
+		} else {
+			RenderMessage(w, "404 Not Found", "Page Not Found", "error", "The page you requested does not exist.", "/", "Go Home", http.StatusNotFound)
+		}
 		return
 	}
 

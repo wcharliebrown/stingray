@@ -3,6 +3,7 @@ package database
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"stingray/models"
 	"strings"
 	"time"
+	"database/sql"
 )
 
 func (d *Database) initDatabase() error {
@@ -37,6 +39,8 @@ func (d *Database) initDatabase() error {
 		css_class VARCHAR(255),
 		scripts TEXT,
 		template VARCHAR(100) DEFAULT 'default',
+		read_groups TEXT,
+		write_groups TEXT,
 		created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
@@ -53,6 +57,8 @@ func (d *Database) initDatabase() error {
 		id INT AUTO_INCREMENT PRIMARY KEY,
 		name VARCHAR(255) UNIQUE NOT NULL,
 		description TEXT,
+		read_groups TEXT,
+		write_groups TEXT,
 		created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		INDEX idx_name (name)
@@ -71,6 +77,8 @@ func (d *Database) initDatabase() error {
 		username VARCHAR(255) UNIQUE NOT NULL,
 		email VARCHAR(255) UNIQUE NOT NULL,
 		password VARCHAR(255) NOT NULL,
+		read_groups TEXT,
+		write_groups TEXT,
 		created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		INDEX idx_username (username),
@@ -89,6 +97,8 @@ func (d *Database) initDatabase() error {
 		id INT AUTO_INCREMENT PRIMARY KEY,
 		user_id INT NOT NULL,
 		group_id INT NOT NULL,
+		read_groups TEXT,
+		write_groups TEXT,
 		created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		UNIQUE KEY unique_user_group (user_id, group_id),
@@ -111,6 +121,8 @@ func (d *Database) initDatabase() error {
 		session_id VARCHAR(255) UNIQUE NOT NULL,
 		user_id INT NOT NULL,
 		username VARCHAR(255) NOT NULL,
+		read_groups TEXT,
+		write_groups TEXT,
 		created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		expires_at TIMESTAMP NOT NULL,
@@ -204,6 +216,12 @@ func (d *Database) initDatabase() error {
 		return err
 	}
 
+	// Run migration to add permission fields to existing tables
+	if err := d.migrateAddPermissionFields(); err != nil {
+		LogSQLError(err)
+		return err
+	}
+
 	return nil
 }
 
@@ -221,6 +239,8 @@ func (d *Database) initializePages() error {
 			CSSClass:       "modern",
 			Scripts:        "",
 			Template:       "modern",
+			ReadGroups:     sql.NullString{String: "[\"everyone\"]", Valid: true},
+			WriteGroups:    sql.NullString{String: "[\"admin\", \"engineer\"]", Valid: true},
 		},
 		{
 			Slug:           "about",
@@ -234,6 +254,8 @@ func (d *Database) initializePages() error {
 			CSSClass:       "modern",
 			Scripts:        "",
 			Template:       "modern",
+			ReadGroups:     sql.NullString{String: "[\"everyone\"]", Valid: true},
+			WriteGroups:    sql.NullString{String: "[\"admin\", \"engineer\"]", Valid: true},
 		},
 		{
 			Slug:           "login",
@@ -247,6 +269,8 @@ func (d *Database) initializePages() error {
 			CSSClass:       "modern",
 			Scripts:        "",
 			Template:       "modern",
+			ReadGroups:     sql.NullString{String: "[\"everyone\"]", Valid: true},
+			WriteGroups:    sql.NullString{String: "[\"admin\", \"engineer\"]", Valid: true},
 		},
 		{
 			Slug:           "shutdown",
@@ -260,6 +284,8 @@ func (d *Database) initializePages() error {
 			CSSClass:       "modern",
 			Scripts:        "",
 			Template:       "modern",
+			ReadGroups:     sql.NullString{String: "[\"everyone\"]", Valid: true},
+			WriteGroups:    sql.NullString{String: "[\"admin\", \"engineer\"]", Valid: true},
 		},
 		{
 			Slug:           "demo",
@@ -273,6 +299,8 @@ func (d *Database) initializePages() error {
 			CSSClass:       "modern",
 			Scripts:        "",
 			Template:       "modern",
+			ReadGroups:     sql.NullString{String: "[\"everyone\"]", Valid: true},
+			WriteGroups:    sql.NullString{String: "[\"admin\", \"engineer\"]", Valid: true},
 		},
 		{
 			Slug:           "orders",
@@ -286,6 +314,8 @@ func (d *Database) initializePages() error {
 			CSSClass:       "modern",
 			Scripts:        "",
 			Template:       "modern",
+			ReadGroups:     sql.NullString{String: "[\"admin\", \"engineer\"]", Valid: true},
+			WriteGroups:    sql.NullString{String: "[\"admin\", \"engineer\"]", Valid: true},
 		},
 		{
 			Slug:           "faq",
@@ -299,6 +329,8 @@ func (d *Database) initializePages() error {
 			CSSClass:       "modern",
 			Scripts:        "",
 			Template:       "modern",
+			ReadGroups:     sql.NullString{String: "[\"customers\", \"admin\", \"engineer\"]", Valid: true},
+			WriteGroups:    sql.NullString{String: "[\"admin\", \"engineer\"]", Valid: true},
 		},
 	}
 
@@ -323,10 +355,11 @@ func (d *Database) createPageIfNotExists(page models.Page) error {
 
 	if count == 0 {
 		_, err = d.db.Exec(`
-			INSERT INTO _page (slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			INSERT INTO _page (slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template, read_groups, write_groups)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			page.Slug, page.Title, page.MetaDescription, page.Header, page.Navigation,
-			page.MainContent, page.Sidebar, page.Footer, page.CSSClass, page.Scripts, page.Template)
+			page.MainContent, page.Sidebar, page.Footer, page.CSSClass, page.Scripts, page.Template,
+			page.ReadGroups, page.WriteGroups)
 		if err != nil {
 			LogSQLError(err)
 			return err
@@ -338,22 +371,26 @@ func (d *Database) createPageIfNotExists(page models.Page) error {
 
 func (d *Database) GetPage(slug string) (*models.Page, error) {
 	var page models.Page
+	var readGroups, writeGroups sql.NullString
 	err := d.db.QueryRow(`
-		SELECT id, slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template, created, modified
+		SELECT id, slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template, read_groups, write_groups, created, modified
 		FROM _page WHERE slug = ?`, slug).Scan(
 		&page.ID, &page.Slug, &page.Title, &page.MetaDescription, &page.Header,
 		&page.Navigation, &page.MainContent, &page.Sidebar, &page.Footer,
-		&page.CSSClass, &page.Scripts, &page.Template, &page.Created, &page.Modified)
+		&page.CSSClass, &page.Scripts, &page.Template, &readGroups, &writeGroups,
+		&page.Created, &page.Modified)
 	if err != nil {
 		LogSQLError(err)
 		return nil, err
 	}
+	page.ReadGroups = readGroups
+	page.WriteGroups = writeGroups
 	return &page, nil
 }
 
 func (d *Database) GetAllPages() ([]models.Page, error) {
 	rows, err := d.db.Query(`
-		SELECT id, slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template, created, modified
+		SELECT id, slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template, read_groups, write_groups, created, modified
 		FROM _page ORDER BY slug`)
 	if err != nil {
 		LogSQLError(err)
@@ -364,14 +401,18 @@ func (d *Database) GetAllPages() ([]models.Page, error) {
 	var pages []models.Page
 	for rows.Next() {
 		var page models.Page
+		var readGroups, writeGroups sql.NullString
 		err := rows.Scan(
 			&page.ID, &page.Slug, &page.Title, &page.MetaDescription, &page.Header,
 			&page.Navigation, &page.MainContent, &page.Sidebar, &page.Footer,
-			&page.CSSClass, &page.Scripts, &page.Template, &page.Created, &page.Modified)
+			&page.CSSClass, &page.Scripts, &page.Template, &readGroups, &writeGroups,
+			&page.Created, &page.Modified)
 		if err != nil {
 			LogSQLError(err)
 			return nil, err
 		}
+		page.ReadGroups = readGroups
+		page.WriteGroups = writeGroups
 		pages = append(pages, page)
 	}
 	return pages, nil
@@ -410,11 +451,11 @@ func (d *Database) CreateSession(userID int, username string, duration time.Dura
 func (d *Database) GetSession(sessionID string) (*models.Session, error) {
 	var session models.Session
 	err := d.db.QueryRow(`
-		SELECT id, session_id, user_id, username, created, expires_at, is_active
+		SELECT id, session_id, user_id, username, read_groups, write_groups, created, expires_at, is_active
 		FROM _session WHERE session_id = ? AND is_active = TRUE AND expires_at > NOW()`,
 		sessionID).Scan(
 		&session.ID, &session.SessionID, &session.UserID, &session.Username,
-		&session.CreatedAt, &session.ExpiresAt, &session.IsActive)
+		&session.ReadGroups, &session.WriteGroups, &session.CreatedAt, &session.ExpiresAt, &session.IsActive)
 	if err != nil {
 		LogSQLError(err)
 		return nil, err
@@ -681,11 +722,11 @@ func (d *Database) UpdateUserPassword(userID int, newPassword string) error {
 func (d *Database) AuthenticateUser(username, password string) (*models.User, error) {
 	var user models.User
 	err := d.db.QueryRow(`
-		SELECT id, username, email, password, created, modified
+		SELECT id, username, email, password, read_groups, write_groups, created, modified
 		FROM _user WHERE username = ?`,
 		username).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password,
-		&user.CreatedAt, &user.UpdatedAt)
+		&user.ReadGroups, &user.WriteGroups, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		LogSQLError(err)
 		return nil, err
@@ -731,11 +772,11 @@ func (d *Database) AuthenticateUser(username, password string) (*models.User, er
 func (d *Database) GetUserByID(userID int) (*models.User, error) {
 	var user models.User
 	err := d.db.QueryRow(`
-		SELECT id, username, email, password, created, modified
+		SELECT id, username, email, password, read_groups, write_groups, created, modified
 		FROM _user WHERE id = ?`,
 		userID).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password,
-		&user.CreatedAt, &user.UpdatedAt)
+		&user.ReadGroups, &user.WriteGroups, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		LogSQLError(err)
 		return nil, err
@@ -745,7 +786,7 @@ func (d *Database) GetUserByID(userID int) (*models.User, error) {
 
 func (d *Database) GetUserGroups(userID int) ([]models.Group, error) {
 	rows, err := d.db.Query(`
-		SELECT g.id, g.name, g.description, g.created
+		SELECT g.id, g.name, g.description, g.read_groups, g.write_groups, g.created
 		FROM _group g
 		JOIN _user_and_group ug ON g.id = ug.group_id
 		WHERE ug.user_id = ?
@@ -761,7 +802,7 @@ func (d *Database) GetUserGroups(userID int) ([]models.Group, error) {
 	for rows.Next() {
 		var group models.Group
 		err := rows.Scan(
-			&group.ID, &group.Name, &group.Description, &group.CreatedAt)
+			&group.ID, &group.Name, &group.Description, &group.ReadGroups, &group.WriteGroups, &group.CreatedAt)
 		if err != nil {
 			LogSQLError(err)
 			return nil, err
@@ -788,7 +829,7 @@ func (d *Database) IsUserInGroup(userID int, groupName string) (bool, error) {
 
 func (d *Database) GetAllGroups() ([]models.Group, error) {
 	rows, err := d.db.Query(`
-		SELECT id, name, description, created
+		SELECT id, name, description, read_groups, write_groups, created
 		FROM _group
 		ORDER BY name`)
 	if err != nil {
@@ -801,7 +842,7 @@ func (d *Database) GetAllGroups() ([]models.Group, error) {
 	for rows.Next() {
 		var group models.Group
 		err := rows.Scan(
-			&group.ID, &group.Name, &group.Description, &group.CreatedAt)
+			&group.ID, &group.Name, &group.Description, &group.ReadGroups, &group.WriteGroups, &group.CreatedAt)
 		if err != nil {
 			LogSQLError(err)
 			return nil, err
@@ -813,7 +854,7 @@ func (d *Database) GetAllGroups() ([]models.Group, error) {
 
 func (d *Database) GetAllUsers() ([]models.User, error) {
 	rows, err := d.db.Query(`
-		SELECT id, username, email, password, created, modified
+		SELECT id, username, email, password, read_groups, write_groups, created, modified
 		FROM _user
 		ORDER BY username`)
 	if err != nil {
@@ -827,7 +868,7 @@ func (d *Database) GetAllUsers() ([]models.User, error) {
 		var user models.User
 		err := rows.Scan(
 			&user.ID, &user.Username, &user.Email, &user.Password,
-			&user.CreatedAt, &user.UpdatedAt)
+			&user.ReadGroups, &user.WriteGroups, &user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
 			LogSQLError(err)
 			return nil, err
@@ -1289,6 +1330,30 @@ func (d *Database) initializeMetadata() error {
 			IsRequired:    false,
 			IsReadOnly:    true,
 		},
+		{
+			TableName:     "_user",
+			FieldName:     "read_groups",
+			DisplayName:   "Read Groups",
+			Description:   "JSON array of groups that can read this user",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  6,
+			ListPosition:  5,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_user",
+			FieldName:     "write_groups",
+			DisplayName:   "Write Groups",
+			Description:   "JSON array of groups that can write to this user",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  7,
+			ListPosition:  6,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
 	}
 
 	for _, field := range usersFields {
@@ -1482,6 +1547,30 @@ func (d *Database) initializeMetadata() error {
 			IsRequired:    false,
 			IsReadOnly:    true,
 		},
+		{
+			TableName:     "_page",
+			FieldName:     "read_groups",
+			DisplayName:   "Read Groups",
+			Description:   "JSON array of groups that can read this page",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  14,
+			ListPosition:  7,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_page",
+			FieldName:     "write_groups",
+			DisplayName:   "Write Groups",
+			Description:   "JSON array of groups that can write to this page",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  15,
+			ListPosition:  8,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
 	}
 
 	for _, field := range pagesFields {
@@ -1567,6 +1656,30 @@ func (d *Database) initializeMetadata() error {
 			IsRequired:    false,
 			IsReadOnly:    true,
 		},
+		{
+			TableName:     "_group",
+			FieldName:     "read_groups",
+			DisplayName:   "Read Groups",
+			Description:   "JSON array of groups that can read this group",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  5,
+			ListPosition:  5,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_group",
+			FieldName:     "write_groups",
+			DisplayName:   "Write Groups",
+			Description:   "JSON array of groups that can write to this group",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  6,
+			ListPosition:  6,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
 	}
 
 	for _, field := range groupsFields {
@@ -1639,6 +1752,42 @@ func (d *Database) initializeMetadata() error {
 			ListPosition:  3,
 			IsRequired:    false,
 			IsReadOnly:    true,
+		},
+		{
+			TableName:     "_user_and_group",
+			FieldName:     "modified",
+			DisplayName:   "Modified",
+			Description:   "Last update date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  4,
+			ListPosition:  4,
+			IsRequired:    false,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     "_user_and_group",
+			FieldName:     "read_groups",
+			DisplayName:   "Read Groups",
+			Description:   "JSON array of groups that can read this relationship",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  5,
+			ListPosition:  5,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "_user_and_group",
+			FieldName:     "write_groups",
+			DisplayName:   "Write Groups",
+			Description:   "JSON array of groups that can write to this relationship",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  6,
+			ListPosition:  6,
+			IsRequired:    false,
+			IsReadOnly:    false,
 		},
 		{
 			TableName:     "_user_and_group",
@@ -2247,3 +2396,315 @@ func LogSQLError(err error) {
 	logger := log.New(f, "SQL_ERROR: ", log.LstdFlags)
 	logger.Println(err.Error())
 } 
+
+// Permission checking functions
+
+// CheckUserReadPermission checks if a user has read permission for a specific row
+func (d *Database) CheckUserReadPermission(userID int, readGroups sql.NullString) (bool, error) {
+	groupsStr := ""
+	if readGroups.Valid {
+		groupsStr = readGroups.String
+	}
+	if groupsStr == "" {
+		return true, nil // No restrictions
+	}
+
+	// Parse read groups
+	var groups []string
+	if err := json.Unmarshal([]byte(groupsStr), &groups); err != nil {
+		return false, fmt.Errorf("failed to parse read groups: %w", err)
+	}
+
+	// Check if user is in any of the read groups
+	for _, group := range groups {
+		// Everyone is automatically in the 'everyone' group
+		if group == "everyone" {
+			return true, nil
+		}
+		// For authenticated users, check their groups
+		if inGroup, _ := d.IsUserInGroup(userID, group); inGroup {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// CheckUserWritePermission checks if a user has write permission for a specific row
+func (d *Database) CheckUserWritePermission(userID int, writeGroups sql.NullString) (bool, error) {
+	groupsStr := ""
+	if writeGroups.Valid {
+		groupsStr = writeGroups.String
+	}
+	if groupsStr == "" {
+		return true, nil // No restrictions
+	}
+
+	// Parse write groups
+	var groups []string
+	if err := json.Unmarshal([]byte(groupsStr), &groups); err != nil {
+		return false, fmt.Errorf("failed to parse write groups: %w", err)
+	}
+
+	// Check if user is in any of the write groups
+	for _, group := range groups {
+		// Everyone is automatically in the 'everyone' group
+		if group == "everyone" {
+			return true, nil
+		}
+		// For authenticated users, check their groups
+		if inGroup, _ := d.IsUserInGroup(userID, group); inGroup {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// GetPageWithPermissionCheck gets a page and checks if the user has read permission
+func (d *Database) GetPageWithPermissionCheck(slug string, userID int) (*models.Page, error) {
+	page, err := d.GetPage(slug)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check read permission
+	hasPermission, err := d.CheckUserReadPermission(userID, page.ReadGroups)
+	if err != nil {
+		return nil, err
+	}
+
+	if !hasPermission {
+		return nil, fmt.Errorf("access denied")
+	}
+
+	return page, nil
+}
+
+// GetAllPagesWithPermissionCheck gets all pages that the user has read permission for
+func (d *Database) GetAllPagesWithPermissionCheck(userID int) ([]models.Page, error) {
+	allPages, err := d.GetAllPages()
+	if err != nil {
+		return nil, err
+	}
+
+	var accessiblePages []models.Page
+	for _, page := range allPages {
+		hasPermission, err := d.CheckUserReadPermission(userID, page.ReadGroups)
+		if err != nil {
+			continue // Skip pages with invalid permission data
+		}
+		if hasPermission {
+			accessiblePages = append(accessiblePages, page)
+		}
+	}
+
+	return accessiblePages, nil
+}
+
+// Migration function to add permission fields to existing tables
+func (d *Database) migrateAddPermissionFields() error {
+	// Helper function to check if column exists
+	columnExists := func(tableName, columnName string) (bool, error) {
+		var count int
+		err := d.db.QueryRow(`
+			SELECT COUNT(*) 
+			FROM INFORMATION_SCHEMA.COLUMNS 
+			WHERE TABLE_SCHEMA = DATABASE() 
+			AND TABLE_NAME = ? 
+			AND COLUMN_NAME = ?`, tableName, columnName).Scan(&count)
+		return count > 0, err
+	}
+
+	// Add permission fields to _page table if they don't exist
+	exists, err := columnExists("_page", "read_groups")
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	if !exists {
+		_, err = d.db.Exec(`ALTER TABLE _page ADD COLUMN read_groups TEXT`)
+		if err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	exists, err = columnExists("_page", "write_groups")
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	if !exists {
+		_, err = d.db.Exec(`ALTER TABLE _page ADD COLUMN write_groups TEXT`)
+		if err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	// Add permission fields to _user table if they don't exist
+	exists, err = columnExists("_user", "read_groups")
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	if !exists {
+		_, err = d.db.Exec(`ALTER TABLE _user ADD COLUMN read_groups TEXT`)
+		if err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	exists, err = columnExists("_user", "write_groups")
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	if !exists {
+		_, err = d.db.Exec(`ALTER TABLE _user ADD COLUMN write_groups TEXT`)
+		if err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	// Add permission fields to _group table if they don't exist
+	exists, err = columnExists("_group", "read_groups")
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	if !exists {
+		_, err = d.db.Exec(`ALTER TABLE _group ADD COLUMN read_groups TEXT`)
+		if err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	exists, err = columnExists("_group", "write_groups")
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	if !exists {
+		_, err = d.db.Exec(`ALTER TABLE _group ADD COLUMN write_groups TEXT`)
+		if err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	// Add permission fields to _session table if they don't exist
+	exists, err = columnExists("_session", "read_groups")
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	if !exists {
+		_, err = d.db.Exec(`ALTER TABLE _session ADD COLUMN read_groups TEXT`)
+		if err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	exists, err = columnExists("_session", "write_groups")
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	if !exists {
+		_, err = d.db.Exec(`ALTER TABLE _session ADD COLUMN write_groups TEXT`)
+		if err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	// Add permission fields to _user_and_group table if they don't exist
+	exists, err = columnExists("_user_and_group", "read_groups")
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	if !exists {
+		_, err = d.db.Exec(`ALTER TABLE _user_and_group ADD COLUMN read_groups TEXT`)
+		if err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	exists, err = columnExists("_user_and_group", "write_groups")
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	if !exists {
+		_, err = d.db.Exec(`ALTER TABLE _user_and_group ADD COLUMN write_groups TEXT`)
+		if err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	// Update existing pages with default permissions
+	_, err = d.db.Exec(`
+		UPDATE _page SET 
+		read_groups = '["everyone"]',
+		write_groups = '["admin", "engineer"]'
+		WHERE read_groups IS NULL OR read_groups = ''`)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Update existing users with default permissions
+	_, err = d.db.Exec(`
+		UPDATE _user SET 
+		read_groups = '["admin", "engineer"]',
+		write_groups = '["admin", "engineer"]'
+		WHERE read_groups IS NULL OR read_groups = ''`)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Update existing groups with default permissions
+	_, err = d.db.Exec(`
+		UPDATE _group SET 
+		read_groups = '["admin", "engineer"]',
+		write_groups = '["admin", "engineer"]'
+		WHERE read_groups IS NULL OR read_groups = ''`)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Update existing sessions with default permissions
+	_, err = d.db.Exec(`
+		UPDATE _session SET 
+		read_groups = '["admin", "engineer"]',
+		write_groups = '["admin", "engineer"]'
+		WHERE read_groups IS NULL OR read_groups = ''`)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Update existing user_and_group records with default permissions
+	_, err = d.db.Exec(`
+		UPDATE _user_and_group SET 
+		read_groups = '["admin", "engineer"]',
+		write_groups = '["admin", "engineer"]'
+		WHERE read_groups IS NULL OR read_groups = ''`)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	return nil
+}

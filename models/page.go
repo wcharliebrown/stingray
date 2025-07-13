@@ -2,6 +2,7 @@ package models
 
 import (
 	"time"
+	"database/sql"
 )
 
 type Page struct {
@@ -17,6 +18,8 @@ type Page struct {
 	CSSClass       string
 	Scripts        string
 	Template       string
+	ReadGroups     sql.NullString
+	WriteGroups    sql.NullString
 	Created        time.Time
 	Modified       time.Time
 } 

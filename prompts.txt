@@ -69,3 +69,12 @@ change the name of pages table to _page
 change the name of sessions table to _session
 add 'created' and 'modified' timestamps fields to all tables
 Change all table names to be singular. _page is okay but for example _users should be _user
+
+Add a special group called 'everyone' All users including any user not authenticated is automatically in the everyone group.
+Public pages like /page/about and /user/login should be accessible(read access) by the 'everyone' group.
+
+Increase the granularity of the permissions system.
+Add two new fields 'read_groups' and 'write_groups' to any tables that don't already have them. 
+If a user is in a group with read permission to a row in any table, they can see it.
+If a user is in a group with write permission to a row in any table, they can edit it.
+This will allow us to make certain pages "public" in other words accessible by the 'everyone group, while maintaining tighter control on other pages for site administration.
