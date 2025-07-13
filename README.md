@@ -34,6 +34,7 @@ Stingray is a simple, fun web API written in Go. It is designed to be open sourc
 - 🛡️ **Middleware**: Authentication and authorization middleware.
 - ⚙️ **Configuration**: Environment-based configuration management.
 - 🧪 **Testing**: Comprehensive test suite included.
+- 🔐 **Secure Password Hashing**: Argon2id password hashing with automatic migration.
 
 ## Current Status
 

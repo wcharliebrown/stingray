@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"os"
+	"stingray/auth"
 	"stingray/models"
 	"time"
 )
@@ -38,28 +40,7 @@ func (d *Database) initDatabase() error {
 		return err
 	}
 
-	// Create sessions table
-	createSessionsTableQuery := `
-	CREATE TABLE IF NOT EXISTS sessions (
-		id INT AUTO_INCREMENT PRIMARY KEY,
-		session_id VARCHAR(255) UNIQUE NOT NULL,
-		user_id INT NOT NULL,
-		username VARCHAR(255) NOT NULL,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		expires_at TIMESTAMP NOT NULL,
-		is_active BOOLEAN DEFAULT TRUE,
-		INDEX idx_session_id (session_id),
-		INDEX idx_expires_at (expires_at),
-		INDEX idx_is_active (is_active),
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
-
-	_, err = d.db.Exec(createSessionsTableQuery)
-	if err != nil {
-		return err
-	}
-
-	// Create groups table
+	// Create groups table (no dependencies)
 	createGroupsTableQuery := `
 	CREATE TABLE IF NOT EXISTS user_groups_table (
 		id INT AUTO_INCREMENT PRIMARY KEY,
@@ -74,7 +55,7 @@ func (d *Database) initDatabase() error {
 		return err
 	}
 
-	// Create users table
+	// Create users table (no dependencies)
 	createUsersTableQuery := `
 	CREATE TABLE IF NOT EXISTS users (
 		id INT AUTO_INCREMENT PRIMARY KEY,
@@ -92,7 +73,7 @@ func (d *Database) initDatabase() error {
 		return err
 	}
 
-	// Create user_groups table (many-to-many relationship)
+	// Create user_groups table (depends on users and groups)
 	createUserGroupsTableQuery := `
 	CREATE TABLE IF NOT EXISTS user_groups (
 		id INT AUTO_INCREMENT PRIMARY KEY,
@@ -106,6 +87,27 @@ func (d *Database) initDatabase() error {
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
 	_, err = d.db.Exec(createUserGroupsTableQuery)
+	if err != nil {
+		return err
+	}
+
+	// Create sessions table (depends on users)
+	createSessionsTableQuery := `
+	CREATE TABLE IF NOT EXISTS sessions (
+		id INT AUTO_INCREMENT PRIMARY KEY,
+		session_id VARCHAR(255) UNIQUE NOT NULL,
+		user_id INT NOT NULL,
+		username VARCHAR(255) NOT NULL,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		expires_at TIMESTAMP NOT NULL,
+		is_active BOOLEAN DEFAULT TRUE,
+		INDEX idx_session_id (session_id),
+		INDEX idx_expires_at (expires_at),
+		INDEX idx_is_active (is_active),
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+
+	_, err = d.db.Exec(createSessionsTableQuery)
 	if err != nil {
 		return err
 	}
@@ -364,7 +366,7 @@ func (d *Database) initializeUsers() error {
 		}
 	}
 
-	// Create default users
+	// Create default users with hashed passwords
 	users := []struct {
 		user   models.User
 		groups []string
@@ -373,7 +375,7 @@ func (d *Database) initializeUsers() error {
 			user: models.User{
 				Username: "admin",
 				Email:    "adminuser@servicecompany.net",
-				Password: os.Getenv("ADMIN_PASSWORD"), // In production, this should be hashed
+				Password: "", // Will be set below
 			},
 			groups: []string{"admin"},
 		},
@@ -381,13 +383,28 @@ func (d *Database) initializeUsers() error {
 			user: models.User{
 				Username: "customer",
 				Email:    "customeruser@company.com",
-				Password: os.Getenv("CUSTOMER_PASSWORD"), // In production, this should be hashed
+				Password: "", // Will be set below
 			},
 			groups: []string{"customers"},
 		},
 	}
 
 	for _, userData := range users {
+		// Hash the password from environment
+		var plainPassword string
+		if userData.user.Username == "admin" {
+			plainPassword = os.Getenv("TEST_ADMIN_PASSWORD")
+		} else {
+			plainPassword = os.Getenv("TEST_CUSTOMER_PASSWORD")
+		}
+		
+		// Hash the password before storing
+		hashedPassword, err := auth.HashPassword(plainPassword)
+		if err != nil {
+			return fmt.Errorf("failed to hash password for user %s: %w", userData.user.Username, err)
+		}
+		userData.user.Password = hashedPassword
+		
 		if err := d.createUserIfNotExists(userData.user, userData.groups); err != nil {
 			return err
 		}
@@ -475,17 +492,97 @@ func (d *Database) addUserToGroup(userID int, groupName string) error {
 	return nil
 }
 
+// CreateUser creates a new user with a hashed password
+func (d *Database) CreateUser(username, email, password string) error {
+	// Hash the password before storing
+	hashedPassword, err := auth.HashPassword(password)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Create user
+	result, err := d.db.Exec(`
+		INSERT INTO users (username, email, password)
+		VALUES (?, ?, ?)`,
+		username, email, hashedPassword)
+	if err != nil {
+		return fmt.Errorf("failed to create user: %w", err)
+	}
+
+	userID, err := result.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("failed to get user ID: %w", err)
+	}
+
+	// Add user to default group (customers)
+	if err := d.addUserToGroup(int(userID), "customers"); err != nil {
+		return fmt.Errorf("failed to add user to default group: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateUserPassword updates a user's password with a new hash
+func (d *Database) UpdateUserPassword(userID int, newPassword string) error {
+	// Hash the new password
+	hashedPassword, err := auth.HashPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Update the password in database
+	_, err = d.db.Exec("UPDATE users SET password = ? WHERE id = ?", hashedPassword, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	return nil
+}
+
 func (d *Database) AuthenticateUser(username, password string) (*models.User, error) {
 	var user models.User
 	err := d.db.QueryRow(`
 		SELECT id, username, email, password, created_at, updated_at
-		FROM users WHERE username = ? AND password = ?`,
-		username, password).Scan(
+		FROM users WHERE username = ?`,
+		username).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password,
 		&user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
+
+	// Check if password is in plain text (for migration)
+	if !auth.IsHashFormat(user.Password) {
+		// Migrate plain text password to hash
+		if user.Password == password {
+			// Password matches plain text, migrate to hash
+			hashedPassword, err := auth.HashPassword(password)
+			if err != nil {
+				return nil, fmt.Errorf("failed to hash password: %w", err)
+			}
+			
+			// Update the password in database
+			_, err = d.db.Exec("UPDATE users SET password = ? WHERE id = ?", hashedPassword, user.ID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to update password hash: %w", err)
+			}
+			
+			user.Password = hashedPassword
+			return &user, nil
+		}
+		return nil, fmt.Errorf("invalid password")
+	}
+
+	// Verify password against hash
+	valid, err := auth.CheckPassword(password, user.Password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify password: %w", err)
+	}
+	
+	if !valid {
+		return nil, fmt.Errorf("invalid password")
+	}
+
 	return &user, nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -36,8 +37,13 @@ func TestUserAuthentication(t *testing.T) {
 	defer cleanupTestDatabase(t, db)
 	defer db.Close()
 
-	// Test user authentication
-	user, err := db.AuthenticateUser("admin", "admin123")
+	// Test user authentication with environment passwords
+	adminPassword := os.Getenv("TEST_ADMIN_PASSWORD")
+	
+	customerPassword := os.Getenv("TEST_CUSTOMER_PASSWORD")
+
+	// Test admin authentication
+	user, err := db.AuthenticateUser("admin", adminPassword)
 	if err != nil {
 		t.Fatalf("Failed to authenticate admin user: %v", err)
 	}
@@ -57,7 +63,7 @@ func TestUserAuthentication(t *testing.T) {
 	}
 
 	// Test customer authentication
-	customer, err := db.AuthenticateUser("customer", "customer123")
+	customer, err := db.AuthenticateUser("customer", customerPassword)
 	if err != nil {
 		t.Fatalf("Failed to authenticate customer user: %v", err)
 	}
@@ -194,10 +200,13 @@ func TestLoginHandler(t *testing.T) {
 
 	authHandler := handlers.NewAuthHandler(db)
 
+	// Get admin password from environment
+	adminPassword := os.Getenv("TEST_ADMIN_PASSWORD")
+
 	// Test successful login
 	formData := url.Values{}
 	formData.Set("username", "admin")
-	formData.Set("password", os.Getenv("ADMIN_PASSWORD"))
+	formData.Set("password", adminPassword)
 
 	req := httptest.NewRequest("POST", "/user/login_post", strings.NewReader(formData.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
