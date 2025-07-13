@@ -15,7 +15,7 @@ The system provides:
 
 ### Tables
 
-#### `users`
+#### `_user`
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
 - `username` (VARCHAR(255), UNIQUE, NOT NULL)
 - `email` (VARCHAR(255), UNIQUE, NOT NULL)
@@ -23,22 +23,22 @@ The system provides:
 - `created_at` (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP)
 - `updated_at` (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP ON UPDATE)
 
-#### `groups`
+#### `_group`
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
 - `name` (VARCHAR(255), UNIQUE, NOT NULL)
 - `description` (TEXT)
 - `created_at` (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP)
 
-#### `user_groups` (Many-to-Many Relationship)
+#### `_user_and_group` (Many-to-Many Relationship)
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
-- `user_id` (INT, FOREIGN KEY REFERENCES users(id))
-- `group_id` (INT, FOREIGN KEY REFERENCES groups(id))
+- `user_id` (INT, FOREIGN KEY REFERENCES _user(id))
+- `group_id` (INT, FOREIGN KEY REFERENCES _group(id))
 - UNIQUE KEY on (user_id, group_id)
 
-#### `sessions` (Updated)
+#### `_session`
 - `id` (INT, PRIMARY KEY, AUTO_INCREMENT)
 - `session_id` (VARCHAR(255), UNIQUE, NOT NULL)
-- `user_id` (INT, NOT NULL, FOREIGN KEY REFERENCES users(id))
+- `user_id` (INT, NOT NULL, FOREIGN KEY REFERENCES _user(id))
 - `username` (VARCHAR(255), NOT NULL)
 - `created_at` (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP)
 - `expires_at` (TIMESTAMP, NOT NULL)

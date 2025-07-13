@@ -61,7 +61,7 @@ stingray/
 
 ### Pages Table Schema
 ```sql
-CREATE TABLE pages (
+CREATE TABLE _page (
     id INT AUTO_INCREMENT PRIMARY KEY,
     slug VARCHAR(255) UNIQUE NOT NULL,
     title VARCHAR(255) NOT NULL,
@@ -73,7 +73,9 @@ CREATE TABLE pages (
     footer TEXT,
     css_class VARCHAR(255),
     scripts TEXT,
-    template VARCHAR(100) DEFAULT 'default'
+    template VARCHAR(100) DEFAULT 'default',
+    created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 

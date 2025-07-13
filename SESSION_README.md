@@ -4,7 +4,7 @@ This document describes the session management functionality implemented in Stin
 
 ## Overview
 
-Sting Ray now includes comprehensive session management using database-backed sessions and secure cookies. Sessions are stored in a `sessions` table and managed through HTTP cookies.
+Sting Ray now includes comprehensive session management using database-backed sessions and secure cookies. Sessions are stored in a `_session` table and managed through HTTP cookies.
 
 ## Features
 
@@ -25,17 +25,18 @@ Sting Ray now includes comprehensive session management using database-backed se
 
 ### Sessions Table
 ```sql
-CREATE TABLE sessions (
+CREATE TABLE _session (
     id INT AUTO_INCREMENT PRIMARY KEY,
     session_id VARCHAR(255) UNIQUE NOT NULL,
-    user_id VARCHAR(255) NOT NULL,
+    user_id INT NOT NULL,
     username VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
     INDEX idx_session_id (session_id),
     INDEX idx_expires_at (expires_at),
-    INDEX idx_is_active (is_active)
+    INDEX idx_is_active (is_active),
+    FOREIGN KEY (user_id) REFERENCES _user(id) ON DELETE CASCADE
 );
 ```
 
@@ -133,7 +134,7 @@ Expired sessions are automatically cleaned up every hour. The cleanup process:
 ### Manual Cleanup
 To manually clean up expired sessions:
 ```sql
-UPDATE sessions SET is_active = FALSE WHERE expires_at <= NOW();
+UPDATE _session SET is_active = FALSE WHERE expires_at <= NOW();
 ```
 
 ## Troubleshooting

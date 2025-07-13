@@ -25,11 +25,11 @@ func setupTestDatabase(t *testing.T) *database.Database {
 
 func cleanupTestDatabase(t *testing.T, db *database.Database) {
 	// Clean up test data
-	db.GetDB().Exec("DELETE FROM user_groups")
-	db.GetDB().Exec("DELETE FROM sessions")
-	db.GetDB().Exec("DELETE FROM users")
-	db.GetDB().Exec("DELETE FROM user_groups_table")
-	db.GetDB().Exec("DELETE FROM pages")
+	db.GetDB().Exec("DELETE FROM _user_and_group")
+	db.GetDB().Exec("DELETE FROM _session")
+	db.GetDB().Exec("DELETE FROM _user")
+	db.GetDB().Exec("DELETE FROM _group")
+	db.GetDB().Exec("DELETE FROM _page")
 }
 
 func TestUserAuthentication(t *testing.T) {

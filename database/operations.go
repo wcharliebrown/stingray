@@ -49,7 +49,7 @@ func (d *Database) initDatabase() error {
 
 	// Create groups table (no dependencies)
 	createGroupsTableQuery := `
-	CREATE TABLE IF NOT EXISTS _groups (
+	CREATE TABLE IF NOT EXISTS _group (
 		id INT AUTO_INCREMENT PRIMARY KEY,
 		name VARCHAR(255) UNIQUE NOT NULL,
 		description TEXT,
@@ -66,7 +66,7 @@ func (d *Database) initDatabase() error {
 
 	// Create users table (no dependencies)
 	createUsersTableQuery := `
-	CREATE TABLE IF NOT EXISTS _users (
+	CREATE TABLE IF NOT EXISTS _user (
 		id INT AUTO_INCREMENT PRIMARY KEY,
 		username VARCHAR(255) UNIQUE NOT NULL,
 		email VARCHAR(255) UNIQUE NOT NULL,
@@ -83,17 +83,17 @@ func (d *Database) initDatabase() error {
 		return err
 	}
 
-	// Create user_groups table (depends on users and groups)
+	// Create user_and_group table (depends on users and groups)
 	createUserGroupsTableQuery := `
-	CREATE TABLE IF NOT EXISTS _users_and_groups (
+	CREATE TABLE IF NOT EXISTS _user_and_group (
 		id INT AUTO_INCREMENT PRIMARY KEY,
 		user_id INT NOT NULL,
 		group_id INT NOT NULL,
 		created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		UNIQUE KEY unique_user_group (user_id, group_id),
-		FOREIGN KEY (user_id) REFERENCES _users(id) ON DELETE CASCADE,
-		FOREIGN KEY (group_id) REFERENCES _groups(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES _user(id) ON DELETE CASCADE,
+		FOREIGN KEY (group_id) REFERENCES _group(id) ON DELETE CASCADE,
 		INDEX idx_user_id (user_id),
 		INDEX idx_group_id (group_id)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
@@ -106,7 +106,7 @@ func (d *Database) initDatabase() error {
 
 	// Create sessions table (depends on users)
 	createSessionsTableQuery := `
-	CREATE TABLE IF NOT EXISTS _sessions (
+	CREATE TABLE IF NOT EXISTS _session (
 		id INT AUTO_INCREMENT PRIMARY KEY,
 		session_id VARCHAR(255) UNIQUE NOT NULL,
 		user_id INT NOT NULL,
@@ -118,7 +118,7 @@ func (d *Database) initDatabase() error {
 		INDEX idx_session_id (session_id),
 		INDEX idx_expires_at (expires_at),
 		INDEX idx_is_active (is_active),
-		FOREIGN KEY (user_id) REFERENCES _users(id) ON DELETE CASCADE
+		FOREIGN KEY (user_id) REFERENCES _user(id) ON DELETE CASCADE
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
 	_, err = d.db.Exec(createSessionsTableQuery)
@@ -370,7 +370,7 @@ func (d *Database) CreateSession(userID int, username string, duration time.Dura
 	expiresAt := time.Now().Add(duration)
 
 	_, err = d.db.Exec(`
-		INSERT INTO _sessions (session_id, user_id, username, expires_at, is_active)
+		INSERT INTO _session (session_id, user_id, username, expires_at, is_active)
 		VALUES (?, ?, ?, ?, TRUE)`,
 		sessionID, userID, username, expiresAt)
 	if err != nil {
@@ -394,7 +394,7 @@ func (d *Database) GetSession(sessionID string) (*models.Session, error) {
 	var session models.Session
 	err := d.db.QueryRow(`
 		SELECT id, session_id, user_id, username, created, expires_at, is_active
-		FROM _sessions WHERE session_id = ? AND is_active = TRUE AND expires_at > NOW()`,
+		FROM _session WHERE session_id = ? AND is_active = TRUE AND expires_at > NOW()`,
 		sessionID).Scan(
 		&session.ID, &session.SessionID, &session.UserID, &session.Username,
 		&session.CreatedAt, &session.ExpiresAt, &session.IsActive)
@@ -407,7 +407,7 @@ func (d *Database) GetSession(sessionID string) (*models.Session, error) {
 
 func (d *Database) InvalidateSession(sessionID string) error {
 	_, err := d.db.Exec(`
-		UPDATE _sessions SET is_active = FALSE WHERE session_id = ?`,
+		UPDATE _session SET is_active = FALSE WHERE session_id = ?`,
 		sessionID)
 	if err != nil {
 		LogSQLError(err)
@@ -418,7 +418,7 @@ func (d *Database) InvalidateSession(sessionID string) error {
 
 func (d *Database) CleanupExpiredSessions() error {
 	_, err := d.db.Exec(`
-		UPDATE _sessions SET is_active = FALSE WHERE expires_at <= NOW()`)
+		UPDATE _session SET is_active = FALSE WHERE expires_at <= NOW()`)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -506,7 +506,7 @@ func (d *Database) initializeUsers() error {
 func (d *Database) createGroupIfNotExists(group models.Group) error {
 	// Check if group exists
 	var count int
-	err := d.db.QueryRow("SELECT COUNT(*) FROM _groups WHERE name = ?", group.Name).Scan(&count)
+	err := d.db.QueryRow("SELECT COUNT(*) FROM _group WHERE name = ?", group.Name).Scan(&count)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -514,7 +514,7 @@ func (d *Database) createGroupIfNotExists(group models.Group) error {
 
 	if count == 0 {
 		_, err = d.db.Exec(`
-			INSERT INTO _groups (name, description)
+			INSERT INTO _group (name, description)
 			VALUES (?, ?)`,
 			group.Name, group.Description)
 		if err != nil {
@@ -529,7 +529,7 @@ func (d *Database) createGroupIfNotExists(group models.Group) error {
 func (d *Database) createUserIfNotExists(user models.User, groupNames []string) error {
 	// Check if user exists
 	var count int
-	err := d.db.QueryRow("SELECT COUNT(*) FROM _users WHERE username = ?", user.Username).Scan(&count)
+	err := d.db.QueryRow("SELECT COUNT(*) FROM _user WHERE username = ?", user.Username).Scan(&count)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -538,7 +538,7 @@ func (d *Database) createUserIfNotExists(user models.User, groupNames []string) 
 	if count == 0 {
 		// Create user
 		result, err := d.db.Exec(`
-			INSERT INTO _users (username, email, password)
+			INSERT INTO _user (username, email, password)
 			VALUES (?, ?, ?)`,
 			user.Username, user.Email, user.Password)
 		if err != nil {
@@ -567,7 +567,7 @@ func (d *Database) createUserIfNotExists(user models.User, groupNames []string) 
 func (d *Database) addUserToGroup(userID int, groupName string) error {
 	// Get group ID
 	var groupID int
-	err := d.db.QueryRow("SELECT id FROM _groups WHERE name = ?", groupName).Scan(&groupID)
+	err := d.db.QueryRow("SELECT id FROM _group WHERE name = ?", groupName).Scan(&groupID)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -575,7 +575,7 @@ func (d *Database) addUserToGroup(userID int, groupName string) error {
 
 	// Check if user is already in group
 	var count int
-	err = d.db.QueryRow("SELECT COUNT(*) FROM _users_and_groups WHERE user_id = ? AND group_id = ?", userID, groupID).Scan(&count)
+	err = d.db.QueryRow("SELECT COUNT(*) FROM _user_and_group WHERE user_id = ? AND group_id = ?", userID, groupID).Scan(&count)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -583,7 +583,7 @@ func (d *Database) addUserToGroup(userID int, groupName string) error {
 
 	if count == 0 {
 		_, err = d.db.Exec(`
-			INSERT INTO _users_and_groups (user_id, group_id)
+			INSERT INTO _user_and_group (user_id, group_id)
 			VALUES (?, ?)`,
 			userID, groupID)
 		if err != nil {
@@ -605,7 +605,7 @@ func (d *Database) CreateUser(username, email, password string) error {
 
 	// Create user
 	result, err := d.db.Exec(`
-		INSERT INTO _users (username, email, password)
+		INSERT INTO _user (username, email, password)
 		VALUES (?, ?, ?)`,
 		username, email, hashedPassword)
 	if err != nil {
@@ -637,7 +637,7 @@ func (d *Database) UpdateUserPassword(userID int, newPassword string) error {
 	}
 
 	// Update the password in database
-	_, err = d.db.Exec("UPDATE _users SET password = ? WHERE id = ?", hashedPassword, userID)
+	_, err = d.db.Exec("UPDATE _user SET password = ? WHERE id = ?", hashedPassword, userID)
 	if err != nil {
 		LogSQLError(err)
 		return fmt.Errorf("failed to update password: %w", err)
@@ -650,7 +650,7 @@ func (d *Database) AuthenticateUser(username, password string) (*models.User, er
 	var user models.User
 	err := d.db.QueryRow(`
 		SELECT id, username, email, password, created, modified
-		FROM _users WHERE username = ?`,
+		FROM _user WHERE username = ?`,
 		username).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password,
 		&user.CreatedAt, &user.UpdatedAt)
@@ -670,7 +670,7 @@ func (d *Database) AuthenticateUser(username, password string) (*models.User, er
 			}
 			
 			// Update the password in database
-			_, err = d.db.Exec("UPDATE _users SET password = ? WHERE id = ?", hashedPassword, user.ID)
+			_, err = d.db.Exec("UPDATE _user SET password = ? WHERE id = ?", hashedPassword, user.ID)
 			if err != nil {
 				LogSQLError(err)
 				return nil, fmt.Errorf("failed to update password hash: %w", err)
@@ -700,7 +700,7 @@ func (d *Database) GetUserByID(userID int) (*models.User, error) {
 	var user models.User
 	err := d.db.QueryRow(`
 		SELECT id, username, email, password, created, modified
-		FROM _users WHERE id = ?`,
+		FROM _user WHERE id = ?`,
 		userID).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password,
 		&user.CreatedAt, &user.UpdatedAt)
@@ -714,8 +714,8 @@ func (d *Database) GetUserByID(userID int) (*models.User, error) {
 func (d *Database) GetUserGroups(userID int) ([]models.Group, error) {
 	rows, err := d.db.Query(`
 		SELECT g.id, g.name, g.description, g.created
-		FROM _groups g
-		JOIN _users_and_groups ug ON g.id = ug.group_id
+		FROM _group g
+		JOIN _user_and_group ug ON g.id = ug.group_id
 		WHERE ug.user_id = ?
 		ORDER BY g.name`,
 		userID)
@@ -743,8 +743,8 @@ func (d *Database) IsUserInGroup(userID int, groupName string) (bool, error) {
 	var count int
 	err := d.db.QueryRow(`
 		SELECT COUNT(*)
-		FROM _users_and_groups ug
-		JOIN _groups g ON ug.group_id = g.id
+		FROM _user_and_group ug
+		JOIN _group g ON ug.group_id = g.id
 		WHERE ug.user_id = ? AND g.name = ?`,
 		userID, groupName).Scan(&count)
 	if err != nil {
@@ -757,7 +757,7 @@ func (d *Database) IsUserInGroup(userID int, groupName string) (bool, error) {
 func (d *Database) GetAllGroups() ([]models.Group, error) {
 	rows, err := d.db.Query(`
 		SELECT id, name, description, created
-		FROM _groups
+		FROM _group
 		ORDER BY name`)
 	if err != nil {
 		LogSQLError(err)
@@ -782,7 +782,7 @@ func (d *Database) GetAllGroups() ([]models.Group, error) {
 func (d *Database) GetAllUsers() ([]models.User, error) {
 	rows, err := d.db.Query(`
 		SELECT id, username, email, password, created, modified
-		FROM _users
+		FROM _user
 		ORDER BY username`)
 	if err != nil {
 		LogSQLError(err)
@@ -1171,7 +1171,7 @@ func (d *Database) GetTableSchema(tableName string) ([]string, error) {
 func (d *Database) initializeMetadata() error {
 	// Initialize metadata for users table
 	usersMetadata := &models.TableMetadata{
-		TableName:   "_users",
+		TableName:   "_user",
 		DisplayName: "Users",
 		Description: "User accounts and authentication information",
 		ReadGroups:  `["admin"]`,
@@ -1186,7 +1186,7 @@ func (d *Database) initializeMetadata() error {
 	// Initialize field metadata for users table
 	usersFields := []models.FieldMetadata{
 		{
-			TableName:     "_users",
+			TableName:     "_user",
 			FieldName:     "id",
 			DisplayName:   "ID",
 			Description:   "Unique identifier",
@@ -1198,7 +1198,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    true,
 		},
 		{
-			TableName:     "_users",
+			TableName:     "_user",
 			FieldName:     "username",
 			DisplayName:   "Username",
 			Description:   "User login name",
@@ -1210,7 +1210,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    false,
 		},
 		{
-			TableName:     "_users",
+			TableName:     "_user",
 			FieldName:     "email",
 			DisplayName:   "Email",
 			Description:   "User email address",
@@ -1222,7 +1222,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    false,
 		},
 		{
-			TableName:     "_users",
+			TableName:     "_user",
 			FieldName:     "password",
 			DisplayName:   "Password",
 			Description:   "Hashed password",
@@ -1234,7 +1234,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    false,
 		},
 		{
-			TableName:     "_users",
+			TableName:     "_user",
 			FieldName:     "created",
 			DisplayName:   "Created",
 			Description:   "Account creation date",
@@ -1246,7 +1246,7 @@ func (d *Database) initializeMetadata() error {
 			IsReadOnly:    true,
 		},
 		{
-			TableName:     "_users",
+			TableName:     "_user",
 			FieldName:     "modified",
 			DisplayName:   "Modified",
 			Description:   "Last update date",

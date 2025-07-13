@@ -184,10 +184,11 @@ go run .
 
 ## Database Schema
 
-The application creates a `pages` table with the following structure:
+The application creates several tables with the following structure:
 
 ```sql
-CREATE TABLE pages (
+-- Pages table
+CREATE TABLE _page (
     id INT AUTO_INCREMENT PRIMARY KEY,
     slug VARCHAR(255) UNIQUE NOT NULL,
     title VARCHAR(255) NOT NULL,
@@ -199,7 +200,50 @@ CREATE TABLE pages (
     footer TEXT,
     css_class VARCHAR(255),
     scripts TEXT,
-    template VARCHAR(100) DEFAULT 'default'
+    template VARCHAR(100) DEFAULT 'default',
+    created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Users table
+CREATE TABLE _user (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(255) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Groups table
+CREATE TABLE _group (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    description TEXT,
+    created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- User-Groups relationship table
+CREATE TABLE _user_and_group (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    group_id INT NOT NULL,
+    created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_user_group (user_id, group_id),
+    FOREIGN KEY (user_id) REFERENCES _user(id) ON DELETE CASCADE,
+    FOREIGN KEY (group_id) REFERENCES _group(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Sessions table
+CREATE TABLE _session (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(255) UNIQUE NOT NULL,
+    user_id INT NOT NULL,
+    username VARCHAR(255) NOT NULL,
+    created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (user_id) REFERENCES _user(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 

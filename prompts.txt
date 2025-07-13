@@ -62,9 +62,10 @@ Add a page for viewing the rows from a database table in am html table with edit
 Add a page for editing or viewing a row in any of the tables either in "engineer" mode showing everything in actual field name labels(without regard to metadata) or in normal mode with nice labels and obeying the metadata.
 
 Implement schema changes
-change the name of user_groups_table to _groups
-change the name of user_groups table to _users_and_groups
-change the name of users table to _users
+change the name of user_groups_table to _group
+change the name of user_groups table to _user_and_group
+change the name of users table to _user
 change the name of pages table to _page
-change the name of sessions table to _sessions
+change the name of sessions table to _session
 add 'created' and 'modified' timestamps fields to all tables
+Change all table names to be singular. _page is okay but for example _users should be _user
