@@ -78,3 +78,5 @@ Add two new fields 'read_groups' and 'write_groups' to any tables that don't alr
 If a user is in a group with read permission to a row in any table, they can see it.
 If a user is in a group with write permission to a row in any table, they can edit it.
 This will allow us to make certain pages "public" in other words accessible by the 'everyone group, while maintaining tighter control on other pages for site administration.
+
+Add a boolead 'debugging_mode' in the .env and env.example. If it is turned on, log all database queries to logs/db_query.log

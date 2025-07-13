@@ -18,7 +18,7 @@ import (
 func (d *Database) initDatabase() error {
 	// Create database if it doesn't exist
 	createDBQuery := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci", "stingray")
-	_, err := d.db.Exec(createDBQuery)
+	_, err := d.Exec(createDBQuery)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -45,7 +45,7 @@ func (d *Database) initDatabase() error {
 		modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
-	_, err = d.db.Exec(createTableQuery)
+	_, err = d.Exec(createTableQuery)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -64,7 +64,7 @@ func (d *Database) initDatabase() error {
 		INDEX idx_name (name)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
-	_, err = d.db.Exec(createGroupsTableQuery)
+	_, err = d.Exec(createGroupsTableQuery)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -85,7 +85,7 @@ func (d *Database) initDatabase() error {
 		INDEX idx_email (email)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
-	_, err = d.db.Exec(createUsersTableQuery)
+	_, err = d.Exec(createUsersTableQuery)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -108,7 +108,7 @@ func (d *Database) initDatabase() error {
 		INDEX idx_group_id (group_id)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
-	_, err = d.db.Exec(createUserGroupsTableQuery)
+	_, err = d.Exec(createUserGroupsTableQuery)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -133,7 +133,7 @@ func (d *Database) initDatabase() error {
 		FOREIGN KEY (user_id) REFERENCES _user(id) ON DELETE CASCADE
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
-	_, err = d.db.Exec(createSessionsTableQuery)
+	_, err = d.Exec(createSessionsTableQuery)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -153,7 +153,7 @@ func (d *Database) initDatabase() error {
 		INDEX idx_table_name (table_name)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
-	_, err = d.db.Exec(createTableMetadataQuery)
+	_, err = d.Exec(createTableMetadataQuery)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -182,7 +182,7 @@ func (d *Database) initDatabase() error {
 		INDEX idx_field_name (field_name)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
-	_, err = d.db.Exec(createFieldMetadataQuery)
+	_, err = d.Exec(createFieldMetadataQuery)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -347,14 +347,14 @@ func (d *Database) initializePages() error {
 func (d *Database) createPageIfNotExists(page models.Page) error {
 	// Check if page exists
 	var count int
-	err := d.db.QueryRow("SELECT COUNT(*) FROM _page WHERE slug = ?", page.Slug).Scan(&count)
+	err := d.QueryRow("SELECT COUNT(*) FROM _page WHERE slug = ?", page.Slug).Scan(&count)
 	if err != nil {
 		LogSQLError(err)
 		return err
 	}
 
 	if count == 0 {
-		_, err = d.db.Exec(`
+		_, err = d.Exec(`
 			INSERT INTO _page (slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template, read_groups, write_groups)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			page.Slug, page.Title, page.MetaDescription, page.Header, page.Navigation,
@@ -372,7 +372,7 @@ func (d *Database) createPageIfNotExists(page models.Page) error {
 func (d *Database) GetPage(slug string) (*models.Page, error) {
 	var page models.Page
 	var readGroups, writeGroups sql.NullString
-	err := d.db.QueryRow(`
+	err := d.QueryRow(`
 		SELECT id, slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template, read_groups, write_groups, created, modified
 		FROM _page WHERE slug = ?`, slug).Scan(
 		&page.ID, &page.Slug, &page.Title, &page.MetaDescription, &page.Header,
@@ -389,7 +389,7 @@ func (d *Database) GetPage(slug string) (*models.Page, error) {
 }
 
 func (d *Database) GetAllPages() ([]models.Page, error) {
-	rows, err := d.db.Query(`
+	rows, err := d.Query(`
 		SELECT id, slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template, read_groups, write_groups, created, modified
 		FROM _page ORDER BY slug`)
 	if err != nil {
@@ -427,7 +427,7 @@ func (d *Database) CreateSession(userID int, username string, duration time.Dura
 
 	expiresAt := time.Now().Add(duration)
 
-	_, err = d.db.Exec(`
+	_, err = d.Exec(`
 		INSERT INTO _session (session_id, user_id, username, expires_at, is_active)
 		VALUES (?, ?, ?, ?, TRUE)`,
 		sessionID, userID, username, expiresAt)
@@ -450,7 +450,7 @@ func (d *Database) CreateSession(userID int, username string, duration time.Dura
 
 func (d *Database) GetSession(sessionID string) (*models.Session, error) {
 	var session models.Session
-	err := d.db.QueryRow(`
+	err := d.QueryRow(`
 		SELECT id, session_id, user_id, username, read_groups, write_groups, created, expires_at, is_active
 		FROM _session WHERE session_id = ? AND is_active = TRUE AND expires_at > NOW()`,
 		sessionID).Scan(
@@ -464,7 +464,7 @@ func (d *Database) GetSession(sessionID string) (*models.Session, error) {
 }
 
 func (d *Database) InvalidateSession(sessionID string) error {
-	_, err := d.db.Exec(`
+	_, err := d.Exec(`
 		UPDATE _session SET is_active = FALSE WHERE session_id = ?`,
 		sessionID)
 	if err != nil {
@@ -475,7 +475,7 @@ func (d *Database) InvalidateSession(sessionID string) error {
 }
 
 func (d *Database) CleanupExpiredSessions() error {
-	_, err := d.db.Exec(`
+	_, err := d.Exec(`
 		UPDATE _session SET is_active = FALSE WHERE expires_at <= NOW()`)
 	if err != nil {
 		LogSQLError(err)
@@ -579,14 +579,14 @@ func (d *Database) initializeUsers() error {
 func (d *Database) createGroupIfNotExists(group models.Group) error {
 	// Check if group exists
 	var count int
-	err := d.db.QueryRow("SELECT COUNT(*) FROM _group WHERE name = ?", group.Name).Scan(&count)
+	err := d.QueryRow("SELECT COUNT(*) FROM _group WHERE name = ?", group.Name).Scan(&count)
 	if err != nil {
 		LogSQLError(err)
 		return err
 	}
 
 	if count == 0 {
-		_, err = d.db.Exec(`
+		_, err = d.Exec(`
 			INSERT INTO _group (name, description)
 			VALUES (?, ?)`,
 			group.Name, group.Description)
@@ -602,7 +602,7 @@ func (d *Database) createGroupIfNotExists(group models.Group) error {
 func (d *Database) createUserIfNotExists(user models.User, groupNames []string) error {
 	// Check if user exists
 	var count int
-	err := d.db.QueryRow("SELECT COUNT(*) FROM _user WHERE username = ?", user.Username).Scan(&count)
+	err := d.QueryRow("SELECT COUNT(*) FROM _user WHERE username = ?", user.Username).Scan(&count)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -610,7 +610,7 @@ func (d *Database) createUserIfNotExists(user models.User, groupNames []string) 
 
 	if count == 0 {
 		// Create user
-		result, err := d.db.Exec(`
+		result, err := d.Exec(`
 			INSERT INTO _user (username, email, password)
 			VALUES (?, ?, ?)`,
 			user.Username, user.Email, user.Password)
@@ -640,7 +640,7 @@ func (d *Database) createUserIfNotExists(user models.User, groupNames []string) 
 func (d *Database) addUserToGroup(userID int, groupName string) error {
 	// Get group ID
 	var groupID int
-	err := d.db.QueryRow("SELECT id FROM _group WHERE name = ?", groupName).Scan(&groupID)
+	err := d.QueryRow("SELECT id FROM _group WHERE name = ?", groupName).Scan(&groupID)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -648,14 +648,14 @@ func (d *Database) addUserToGroup(userID int, groupName string) error {
 
 	// Check if user is already in group
 	var count int
-	err = d.db.QueryRow("SELECT COUNT(*) FROM _user_and_group WHERE user_id = ? AND group_id = ?", userID, groupID).Scan(&count)
+	err = d.QueryRow("SELECT COUNT(*) FROM _user_and_group WHERE user_id = ? AND group_id = ?", userID, groupID).Scan(&count)
 	if err != nil {
 		LogSQLError(err)
 		return err
 	}
 
 	if count == 0 {
-		_, err = d.db.Exec(`
+		_, err = d.Exec(`
 			INSERT INTO _user_and_group (user_id, group_id)
 			VALUES (?, ?)`,
 			userID, groupID)
@@ -677,7 +677,7 @@ func (d *Database) CreateUser(username, email, password string) error {
 	}
 
 	// Create user
-	result, err := d.db.Exec(`
+	result, err := d.Exec(`
 		INSERT INTO _user (username, email, password)
 		VALUES (?, ?, ?)`,
 		username, email, hashedPassword)
@@ -710,7 +710,7 @@ func (d *Database) UpdateUserPassword(userID int, newPassword string) error {
 	}
 
 	// Update the password in database
-	_, err = d.db.Exec("UPDATE _user SET password = ? WHERE id = ?", hashedPassword, userID)
+	_, err = d.Exec("UPDATE _user SET password = ? WHERE id = ?", hashedPassword, userID)
 	if err != nil {
 		LogSQLError(err)
 		return fmt.Errorf("failed to update password: %w", err)
@@ -721,7 +721,7 @@ func (d *Database) UpdateUserPassword(userID int, newPassword string) error {
 
 func (d *Database) AuthenticateUser(username, password string) (*models.User, error) {
 	var user models.User
-	err := d.db.QueryRow(`
+	err := d.QueryRow(`
 		SELECT id, username, email, password, read_groups, write_groups, created, modified
 		FROM _user WHERE username = ?`,
 		username).Scan(
@@ -743,7 +743,7 @@ func (d *Database) AuthenticateUser(username, password string) (*models.User, er
 			}
 			
 			// Update the password in database
-			_, err = d.db.Exec("UPDATE _user SET password = ? WHERE id = ?", hashedPassword, user.ID)
+			_, err = d.Exec("UPDATE _user SET password = ? WHERE id = ?", hashedPassword, user.ID)
 			if err != nil {
 				LogSQLError(err)
 				return nil, fmt.Errorf("failed to update password hash: %w", err)
@@ -771,7 +771,7 @@ func (d *Database) AuthenticateUser(username, password string) (*models.User, er
 
 func (d *Database) GetUserByID(userID int) (*models.User, error) {
 	var user models.User
-	err := d.db.QueryRow(`
+	err := d.QueryRow(`
 		SELECT id, username, email, password, read_groups, write_groups, created, modified
 		FROM _user WHERE id = ?`,
 		userID).Scan(
@@ -785,7 +785,7 @@ func (d *Database) GetUserByID(userID int) (*models.User, error) {
 }
 
 func (d *Database) GetUserGroups(userID int) ([]models.Group, error) {
-	rows, err := d.db.Query(`
+	rows, err := d.Query(`
 		SELECT g.id, g.name, g.description, g.read_groups, g.write_groups, g.created
 		FROM _group g
 		JOIN _user_and_group ug ON g.id = ug.group_id
@@ -814,7 +814,7 @@ func (d *Database) GetUserGroups(userID int) ([]models.Group, error) {
 
 func (d *Database) IsUserInGroup(userID int, groupName string) (bool, error) {
 	var count int
-	err := d.db.QueryRow(`
+	err := d.QueryRow(`
 		SELECT COUNT(*)
 		FROM _user_and_group ug
 		JOIN _group g ON ug.group_id = g.id
@@ -828,7 +828,7 @@ func (d *Database) IsUserInGroup(userID int, groupName string) (bool, error) {
 }
 
 func (d *Database) GetAllGroups() ([]models.Group, error) {
-	rows, err := d.db.Query(`
+	rows, err := d.Query(`
 		SELECT id, name, description, read_groups, write_groups, created
 		FROM _group
 		ORDER BY name`)
@@ -853,7 +853,7 @@ func (d *Database) GetAllGroups() ([]models.Group, error) {
 }
 
 func (d *Database) GetAllUsers() ([]models.User, error) {
-	rows, err := d.db.Query(`
+	rows, err := d.Query(`
 		SELECT id, username, email, password, read_groups, write_groups, created, modified
 		FROM _user
 		ORDER BY username`)
@@ -883,7 +883,7 @@ func (d *Database) GetAllUsers() ([]models.User, error) {
 // GetTableMetadata retrieves metadata for a specific table
 func (d *Database) GetTableMetadata(tableName string) (*models.TableMetadata, error) {
 	var metadata models.TableMetadata
-	err := d.db.QueryRow(`
+	err := d.QueryRow(`
 		SELECT id, table_name, display_name, description, read_groups, write_groups, created, modified
 		FROM _table_metadata WHERE table_name = ?`,
 		tableName).Scan(
@@ -898,7 +898,7 @@ func (d *Database) GetTableMetadata(tableName string) (*models.TableMetadata, er
 
 // GetAllTableMetadata retrieves metadata for all tables
 func (d *Database) GetAllTableMetadata() ([]models.TableMetadata, error) {
-	rows, err := d.db.Query(`
+	rows, err := d.Query(`
 		SELECT id, table_name, display_name, description, read_groups, write_groups, created, modified
 		FROM _table_metadata ORDER BY table_name`)
 	if err != nil {
@@ -924,7 +924,7 @@ func (d *Database) GetAllTableMetadata() ([]models.TableMetadata, error) {
 
 // CreateTableMetadata creates new table metadata
 func (d *Database) CreateTableMetadata(metadata *models.TableMetadata) error {
-	_, err := d.db.Exec(`
+	_, err := d.Exec(`
 		INSERT INTO _table_metadata (table_name, display_name, description, read_groups, write_groups)
 		VALUES (?, ?, ?, ?, ?)`,
 		metadata.TableName, metadata.DisplayName, metadata.Description,
@@ -938,7 +938,7 @@ func (d *Database) CreateTableMetadata(metadata *models.TableMetadata) error {
 
 // UpdateTableMetadata updates existing table metadata
 func (d *Database) UpdateTableMetadata(metadata *models.TableMetadata) error {
-	_, err := d.db.Exec(`
+	_, err := d.Exec(`
 		UPDATE _table_metadata 
 		SET display_name = ?, description = ?, read_groups = ?, write_groups = ?
 		WHERE table_name = ?`,
@@ -952,7 +952,7 @@ func (d *Database) UpdateTableMetadata(metadata *models.TableMetadata) error {
 
 // GetFieldMetadata retrieves metadata for fields of a specific table
 func (d *Database) GetFieldMetadata(tableName string) ([]models.FieldMetadata, error) {
-	rows, err := d.db.Query(`
+	rows, err := d.Query(`
 		SELECT id, table_name, field_name, display_name, description, db_type, html_input_type,
 		       form_position, list_position, is_required, is_read_only, default_value, validation_rules,
 		       created, modified
@@ -984,7 +984,7 @@ func (d *Database) GetFieldMetadata(tableName string) ([]models.FieldMetadata, e
 // GetFieldMetadataByField retrieves metadata for a specific field
 func (d *Database) GetFieldMetadataByField(tableName, fieldName string) (*models.FieldMetadata, error) {
 	var metadata models.FieldMetadata
-	err := d.db.QueryRow(`
+	err := d.QueryRow(`
 		SELECT id, table_name, field_name, display_name, description, db_type, html_input_type,
 		       form_position, list_position, is_required, is_read_only, default_value, validation_rules,
 		       created, modified
@@ -1003,7 +1003,7 @@ func (d *Database) GetFieldMetadataByField(tableName, fieldName string) (*models
 
 // CreateFieldMetadata creates new field metadata
 func (d *Database) CreateFieldMetadata(metadata *models.FieldMetadata) error {
-	_, err := d.db.Exec(`
+	_, err := d.Exec(`
 		INSERT INTO _field_metadata (table_name, field_name, display_name, description, db_type, html_input_type,
 		                           form_position, list_position, is_required, is_read_only, default_value, validation_rules)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1019,7 +1019,7 @@ func (d *Database) CreateFieldMetadata(metadata *models.FieldMetadata) error {
 
 // UpdateFieldMetadata updates existing field metadata
 func (d *Database) UpdateFieldMetadata(metadata *models.FieldMetadata) error {
-	_, err := d.db.Exec(`
+	_, err := d.Exec(`
 		UPDATE _field_metadata 
 		SET display_name = ?, description = ?, db_type = ?, html_input_type = ?,
 		    form_position = ?, list_position = ?, is_required = ?, is_read_only = ?,
@@ -1039,7 +1039,7 @@ func (d *Database) UpdateFieldMetadata(metadata *models.FieldMetadata) error {
 func (d *Database) GetTableRows(tableName string, page, pageSize int) ([]models.TableRow, int, error) {
 	// Get total count
 	var total int
-	err := d.db.QueryRow("SELECT COUNT(*) FROM `"+tableName+"`").Scan(&total)
+	err := d.QueryRow("SELECT COUNT(*) FROM `"+tableName+"`").Scan(&total)
 	if err != nil {
 		LogSQLError(err)
 		return nil, 0, err
@@ -1047,7 +1047,7 @@ func (d *Database) GetTableRows(tableName string, page, pageSize int) ([]models.
 
 	// Get rows with pagination
 	offset := (page - 1) * pageSize
-	rows, err := d.db.Query("SELECT * FROM `"+tableName+"` LIMIT ? OFFSET ?", pageSize, offset)
+	rows, err := d.Query("SELECT * FROM `"+tableName+"` LIMIT ? OFFSET ?", pageSize, offset)
 	if err != nil {
 		LogSQLError(err)
 		return nil, 0, err
@@ -1112,7 +1112,7 @@ func (d *Database) GetTableRows(tableName string, page, pageSize int) ([]models.
 
 // GetTableRow retrieves a specific row from a table
 func (d *Database) GetTableRow(tableName string, id int) (*models.TableRow, error) {
-	rows, err := d.db.Query("SELECT * FROM `"+tableName+"` WHERE id = ?", id)
+	rows, err := d.Query("SELECT * FROM `"+tableName+"` WHERE id = ?", id)
 	if err != nil {
 		LogSQLError(err)
 		return nil, err
@@ -1178,7 +1178,7 @@ func (d *Database) CreateTableRow(tableName string, data map[string]interface{})
 	}
 
 	query := "INSERT INTO `" + tableName + "` (" + strings.Join(columns, ", ") + ") VALUES (" + strings.Join(placeholders, ", ") + ")"
-	_, err := d.db.Exec(query, values...)
+	_, err := d.Exec(query, values...)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -1199,7 +1199,7 @@ func (d *Database) UpdateTableRow(tableName string, id int, data map[string]inte
 
 	values = append(values, id)
 	query := "UPDATE `" + tableName + "` SET " + strings.Join(setClauses, ", ") + " WHERE id = ?"
-	_, err := d.db.Exec(query, values...)
+	_, err := d.Exec(query, values...)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -1209,7 +1209,7 @@ func (d *Database) UpdateTableRow(tableName string, id int, data map[string]inte
 
 // DeleteTableRow deletes a row from a table
 func (d *Database) DeleteTableRow(tableName string, id int) error {
-	_, err := d.db.Exec("DELETE FROM `"+tableName+"` WHERE id = ?", id)
+	_, err := d.Exec("DELETE FROM `"+tableName+"` WHERE id = ?", id)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -1219,7 +1219,7 @@ func (d *Database) DeleteTableRow(tableName string, id int) error {
 
 // GetTableSchema retrieves the schema information for a table
 func (d *Database) GetTableSchema(tableName string) ([]string, error) {
-	rows, err := d.db.Query("DESCRIBE `" + tableName + "`")
+	rows, err := d.Query("DESCRIBE `" + tableName + "`")
 	if err != nil {
 		LogSQLError(err)
 		return nil, err
@@ -2269,7 +2269,7 @@ func (d *Database) updateExistingMetadataForEngineer() error {
 		// Update read groups to include engineer
 		if tableName == "_page" {
 			// Special handling for pages table - add engineer and everyone to existing read groups
-			_, err := d.db.Exec(`
+			_, err := d.Exec(`
 				UPDATE _table_metadata 
 				SET read_groups = '["admin", "customers", "engineer", "everyone"]'
 				WHERE table_name = ? AND read_groups = '["admin", "customers"]'`,
@@ -2280,7 +2280,7 @@ func (d *Database) updateExistingMetadataForEngineer() error {
 			}
 		} else {
 			// Standard handling for other tables
-			_, err := d.db.Exec(`
+			_, err := d.Exec(`
 				UPDATE _table_metadata 
 				SET read_groups = '["admin", "engineer"]'
 				WHERE table_name = ? AND read_groups = '["admin"]'`,
@@ -2292,7 +2292,7 @@ func (d *Database) updateExistingMetadataForEngineer() error {
 		}
 		
 		// Update write groups to include engineer
-		_, err := d.db.Exec(`
+		_, err := d.Exec(`
 			UPDATE _table_metadata 
 			SET write_groups = '["admin", "engineer"]'
 			WHERE table_name = ? AND write_groups = '["admin"]'`,
@@ -2321,7 +2321,7 @@ func (d *Database) updateExistingMetadataForEveryone() error {
 		// Update read groups to include everyone for pages table
 		if tableName == "_page" {
 			// Special handling for pages table - add everyone to existing read groups
-			_, err := d.db.Exec(`
+			_, err := d.Exec(`
 				UPDATE _table_metadata 
 				SET read_groups = '["admin", "customers", "engineer", "everyone"]'
 				WHERE table_name = ? AND read_groups NOT LIKE '%everyone%'`,
@@ -2340,7 +2340,7 @@ func (d *Database) updateExistingMetadataForEveryone() error {
 func (d *Database) createTableMetadataIfNotExists(metadata *models.TableMetadata) error {
 	// Check if metadata exists
 	var count int
-	err := d.db.QueryRow("SELECT COUNT(*) FROM _table_metadata WHERE table_name = ?", metadata.TableName).Scan(&count)
+	err := d.QueryRow("SELECT COUNT(*) FROM _table_metadata WHERE table_name = ?", metadata.TableName).Scan(&count)
 	if err != nil {
 		LogSQLError(err)
 		return err
@@ -2360,7 +2360,7 @@ func (d *Database) createTableMetadataIfNotExists(metadata *models.TableMetadata
 func (d *Database) createFieldMetadataIfNotExists(metadata *models.FieldMetadata) error {
 	// Check if metadata exists
 	var count int
-	err := d.db.QueryRow("SELECT COUNT(*) FROM _field_metadata WHERE table_name = ? AND field_name = ?", 
+	err := d.QueryRow("SELECT COUNT(*) FROM _field_metadata WHERE table_name = ? AND field_name = ?", 
 		metadata.TableName, metadata.FieldName).Scan(&count)
 	if err != nil {
 		LogSQLError(err)
@@ -2507,7 +2507,7 @@ func (d *Database) migrateAddPermissionFields() error {
 	// Helper function to check if column exists
 	columnExists := func(tableName, columnName string) (bool, error) {
 		var count int
-		err := d.db.QueryRow(`
+		err := d.QueryRow(`
 			SELECT COUNT(*) 
 			FROM INFORMATION_SCHEMA.COLUMNS 
 			WHERE TABLE_SCHEMA = DATABASE() 
@@ -2523,7 +2523,7 @@ func (d *Database) migrateAddPermissionFields() error {
 		return err
 	}
 	if !exists {
-		_, err = d.db.Exec(`ALTER TABLE _page ADD COLUMN read_groups TEXT`)
+		_, err = d.Exec(`ALTER TABLE _page ADD COLUMN read_groups TEXT`)
 		if err != nil {
 			LogSQLError(err)
 			return err
@@ -2536,7 +2536,7 @@ func (d *Database) migrateAddPermissionFields() error {
 		return err
 	}
 	if !exists {
-		_, err = d.db.Exec(`ALTER TABLE _page ADD COLUMN write_groups TEXT`)
+		_, err = d.Exec(`ALTER TABLE _page ADD COLUMN write_groups TEXT`)
 		if err != nil {
 			LogSQLError(err)
 			return err
@@ -2550,7 +2550,7 @@ func (d *Database) migrateAddPermissionFields() error {
 		return err
 	}
 	if !exists {
-		_, err = d.db.Exec(`ALTER TABLE _user ADD COLUMN read_groups TEXT`)
+		_, err = d.Exec(`ALTER TABLE _user ADD COLUMN read_groups TEXT`)
 		if err != nil {
 			LogSQLError(err)
 			return err
@@ -2563,7 +2563,7 @@ func (d *Database) migrateAddPermissionFields() error {
 		return err
 	}
 	if !exists {
-		_, err = d.db.Exec(`ALTER TABLE _user ADD COLUMN write_groups TEXT`)
+		_, err = d.Exec(`ALTER TABLE _user ADD COLUMN write_groups TEXT`)
 		if err != nil {
 			LogSQLError(err)
 			return err
@@ -2577,7 +2577,7 @@ func (d *Database) migrateAddPermissionFields() error {
 		return err
 	}
 	if !exists {
-		_, err = d.db.Exec(`ALTER TABLE _group ADD COLUMN read_groups TEXT`)
+		_, err = d.Exec(`ALTER TABLE _group ADD COLUMN read_groups TEXT`)
 		if err != nil {
 			LogSQLError(err)
 			return err
@@ -2590,7 +2590,7 @@ func (d *Database) migrateAddPermissionFields() error {
 		return err
 	}
 	if !exists {
-		_, err = d.db.Exec(`ALTER TABLE _group ADD COLUMN write_groups TEXT`)
+		_, err = d.Exec(`ALTER TABLE _group ADD COLUMN write_groups TEXT`)
 		if err != nil {
 			LogSQLError(err)
 			return err
@@ -2604,7 +2604,7 @@ func (d *Database) migrateAddPermissionFields() error {
 		return err
 	}
 	if !exists {
-		_, err = d.db.Exec(`ALTER TABLE _session ADD COLUMN read_groups TEXT`)
+		_, err = d.Exec(`ALTER TABLE _session ADD COLUMN read_groups TEXT`)
 		if err != nil {
 			LogSQLError(err)
 			return err
@@ -2617,7 +2617,7 @@ func (d *Database) migrateAddPermissionFields() error {
 		return err
 	}
 	if !exists {
-		_, err = d.db.Exec(`ALTER TABLE _session ADD COLUMN write_groups TEXT`)
+		_, err = d.Exec(`ALTER TABLE _session ADD COLUMN write_groups TEXT`)
 		if err != nil {
 			LogSQLError(err)
 			return err
@@ -2631,7 +2631,7 @@ func (d *Database) migrateAddPermissionFields() error {
 		return err
 	}
 	if !exists {
-		_, err = d.db.Exec(`ALTER TABLE _user_and_group ADD COLUMN read_groups TEXT`)
+		_, err = d.Exec(`ALTER TABLE _user_and_group ADD COLUMN read_groups TEXT`)
 		if err != nil {
 			LogSQLError(err)
 			return err
@@ -2644,7 +2644,7 @@ func (d *Database) migrateAddPermissionFields() error {
 		return err
 	}
 	if !exists {
-		_, err = d.db.Exec(`ALTER TABLE _user_and_group ADD COLUMN write_groups TEXT`)
+		_, err = d.Exec(`ALTER TABLE _user_and_group ADD COLUMN write_groups TEXT`)
 		if err != nil {
 			LogSQLError(err)
 			return err
@@ -2652,7 +2652,7 @@ func (d *Database) migrateAddPermissionFields() error {
 	}
 
 	// Update existing pages with default permissions
-	_, err = d.db.Exec(`
+	_, err = d.Exec(`
 		UPDATE _page SET 
 		read_groups = '["everyone"]',
 		write_groups = '["admin", "engineer"]'
@@ -2663,7 +2663,7 @@ func (d *Database) migrateAddPermissionFields() error {
 	}
 
 	// Update existing users with default permissions
-	_, err = d.db.Exec(`
+	_, err = d.Exec(`
 		UPDATE _user SET 
 		read_groups = '["admin", "engineer"]',
 		write_groups = '["admin", "engineer"]'
@@ -2674,7 +2674,7 @@ func (d *Database) migrateAddPermissionFields() error {
 	}
 
 	// Update existing groups with default permissions
-	_, err = d.db.Exec(`
+	_, err = d.Exec(`
 		UPDATE _group SET 
 		read_groups = '["admin", "engineer"]',
 		write_groups = '["admin", "engineer"]'
@@ -2685,7 +2685,7 @@ func (d *Database) migrateAddPermissionFields() error {
 	}
 
 	// Update existing sessions with default permissions
-	_, err = d.db.Exec(`
+	_, err = d.Exec(`
 		UPDATE _session SET 
 		read_groups = '["admin", "engineer"]',
 		write_groups = '["admin", "engineer"]'
@@ -2696,7 +2696,7 @@ func (d *Database) migrateAddPermissionFields() error {
 	}
 
 	// Update existing user_and_group records with default permissions
-	_, err = d.db.Exec(`
+	_, err = d.Exec(`
 		UPDATE _user_and_group SET 
 		read_groups = '["admin", "engineer"]',
 		write_groups = '["admin", "engineer"]'

@@ -15,7 +15,7 @@ func main() {
 	// Load config
 	cfg := config.LoadConfig()
 
-	db, err := database.NewDatabase(cfg.GetDSN())
+	db, err := database.NewDatabase(cfg.GetDSN(), cfg.DebuggingMode)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}

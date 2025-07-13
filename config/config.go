@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"strconv"
 )
 
 type Config struct {
@@ -13,6 +14,7 @@ type Config struct {
 	MySQLUser     string
 	MySQLPassword string
 	MySQLDatabase string
+	DebuggingMode bool
 	// Test user credentials
 	TestAdminUsername    string
 	TestAdminPassword    string
@@ -31,6 +33,7 @@ func LoadConfig() *Config {
 		MySQLUser:     os.Getenv("MYSQL_USER"),
 		MySQLPassword: os.Getenv("MYSQL_PASSWORD"),
 		MySQLDatabase: os.Getenv("MYSQL_DATABASE"),
+		DebuggingMode: getEnvBool("DEBUGGING_MODE", false),
 		// Test user credentials
 		TestAdminUsername:    getEnv("TEST_ADMIN_USERNAME", "admin"),
 		TestAdminPassword:    getEnv("TEST_ADMIN_PASSWORD", "admin"),
@@ -70,6 +73,15 @@ func loadEnvFile(filename string) {
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
+	}
+	return defaultValue
+}
+
+func getEnvBool(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			return boolValue
+		}
 	}
 	return defaultValue
 }
