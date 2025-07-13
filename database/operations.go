@@ -450,16 +450,30 @@ func (d *Database) CreateSession(userID int, username string, duration time.Dura
 
 func (d *Database) GetSession(sessionID string) (*models.Session, error) {
 	var session models.Session
+	var readGroups, writeGroups sql.NullString
 	err := d.QueryRow(`
 		SELECT id, session_id, user_id, username, read_groups, write_groups, created, expires_at, is_active
 		FROM _session WHERE session_id = ? AND is_active = TRUE AND expires_at > NOW()`,
 		sessionID).Scan(
 		&session.ID, &session.SessionID, &session.UserID, &session.Username,
-		&session.ReadGroups, &session.WriteGroups, &session.CreatedAt, &session.ExpiresAt, &session.IsActive)
+		&readGroups, &writeGroups, &session.CreatedAt, &session.ExpiresAt, &session.IsActive)
 	if err != nil {
 		LogSQLError(err)
 		return nil, err
 	}
+	
+	// Handle NULL values
+	if readGroups.Valid {
+		session.ReadGroups = readGroups.String
+	} else {
+		session.ReadGroups = ""
+	}
+	if writeGroups.Valid {
+		session.WriteGroups = writeGroups.String
+	} else {
+		session.WriteGroups = ""
+	}
+	
 	return &session, nil
 }
 

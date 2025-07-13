@@ -39,3 +39,6 @@ go.work.sum
 # Logs
 logs/*log*
 
+# Testing cookies
+*cookies*.txt
+

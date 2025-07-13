@@ -60,6 +60,12 @@ On startup, the system creates two default users:
 - **Password**: `see .env file`
 - **Groups**: `customers`
 
+### Engineer User
+- **Username**: `engineer`
+- **Email**: `engineeruser@servicecompany.net`
+- **Password**: `see .env file`
+- **Groups**: `engineer`
+
 ## Default Groups
 
 ### Admin Group
@@ -72,6 +78,21 @@ On startup, the system creates two default users:
 - **Description**: "Customer group with limited access"
 - **Permissions**: Access to FAQ page and basic functionality
 
+### Engineer Group
+- **Name**: `engineer`
+- **Description**: "Engineer group with technical access"
+- **Permissions**: Access to database management, metadata tables, and engineer toggle functionality
+
+### Everyone Group (Special)
+- **Name**: `everyone`
+- **Description**: "Special group that includes all users including unauthenticated users"
+- **Purpose**: Used to mark assets as publicly accessible
+- **Usage**: 
+  - Public pages (about, login, home) have 'everyone' in read_groups
+  - Public tables can be viewed by all users when 'everyone' is in read_groups
+  - Allows unauthenticated access to specific content
+  - Automatically includes all users (authenticated and unauthenticated)
+
 ## Protected Pages
 
 ### Orders Page (`/page/orders`)
@@ -83,6 +104,23 @@ On startup, the system creates two default users:
 - **Access**: Customers group only
 - **Content**: Frequently asked questions and support information
 - **Features**: General questions, technical support, contact information
+
+### Database Tables Page (`/metadata/tables`)
+- **Access**: Admin and Engineer groups only
+- **Content**: Database table management interface
+- **Features**: 
+  - View all accessible database tables
+  - Engineer toggle for viewing all tables (engineer group only)
+  - Edit and delete table data
+  - Create new table records
+
+### Public Pages
+- **Access**: Everyone (including unauthenticated users)
+- **Content**: Public pages like about, login, home
+- **Features**:
+  - Accessible without authentication
+  - Marked with 'everyone' group in read_groups
+  - Examples: About page, login page, home page
 
 ## API Endpoints
 
@@ -179,6 +217,7 @@ Provides role-based access control:
 - `RequireGroup(groupName)` - Ensures user is in specific group
 - `RequireAdmin()` - Ensures user is in admin group
 - `RequireCustomer()` - Ensures user is in customers group
+- `RequireEngineer()` - Ensures user is in engineer group
 
 ### SessionMiddleware
 Handles session management:

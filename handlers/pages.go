@@ -44,18 +44,19 @@ func (h *PageHandler) HandleHome(w http.ResponseWriter, r *http.Request) {
 			username = "User"
 		}
 		
-		// Check if user is admin
+		// Check if user is admin or engineer
 		session, err := h.sm.GetSessionFromRequest(r)
-		var isAdmin bool
+		var isAdmin, isEngineer bool
 		if err == nil {
 			isAdmin, _ = h.db.IsUserInGroup(session.UserID, "admin")
+			isEngineer, _ = h.db.IsUserInGroup(session.UserID, "engineer")
 		}
 		
-		// Build navigation with admin-specific links
+		// Build navigation with admin/engineer-specific links
 		nav := `<a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/profile">Profile</a> | <a href="/user/logout">Logout</a>`
 		sidebar := `<h3>Welcome, ` + username + `!</h3><ul><li><a href="/page/about">About</a></li><li><a href="/page/demo">Demo</a></li><li><a href="/user/profile">Profile</a></li><li><a href="/user/logout">Logout</a></li>`
 		
-		if isAdmin {
+		if isAdmin || isEngineer {
 			nav += ` | <a href="/metadata/tables">Database Tables</a>`
 			sidebar += `<li><a href="/metadata/tables">Database Tables</a></li>`
 		}
@@ -121,17 +122,18 @@ func (h *PageHandler) HandlePage(w http.ResponseWriter, r *http.Request) {
 				username = "User"
 			}
 			
-			// Check if user is admin
+			// Check if user is admin or engineer
 			session, err := h.sm.GetSessionFromRequest(r)
-			var isAdmin bool
+			var isAdmin, isEngineer bool
 			if err == nil {
 				isAdmin, _ = h.db.IsUserInGroup(session.UserID, "admin")
+				isEngineer, _ = h.db.IsUserInGroup(session.UserID, "engineer")
 			}
 			
-			// Build navigation with admin-specific links
+			// Build navigation with admin/engineer-specific links
 			nav := `<a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/profile">Profile</a> | <a href="/user/logout">Logout</a>`
 			
-			if isAdmin {
+			if isAdmin || isEngineer {
 				nav += ` | <a href="/metadata/tables">Database Tables</a>`
 			}
 			

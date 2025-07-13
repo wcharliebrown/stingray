@@ -26,7 +26,7 @@ Stingray is a simple, fun web API written in Go. It is designed to be open sourc
 - 🗄️ **Database**: MySQL backend with automatic schema creation.
 - 👐 **Open Source**: MIT licensed, contributions welcome!
 - 🔐 **Authentication**: Session-based user authentication system.
-- 👥 **Role-Based Access Control**: User groups and permission management.
+- 👥 **Role-Based Access Control**: User groups and permission management with public access via 'everyone' group.
 - 📄 **Dynamic Content**: Template-driven page rendering with embedded templates.
 - 🎨 **Multiple Templates**: Support for various HTML templates (default, simple, modern).
 - 🔄 **Session Management**: Automatic session cleanup and expiration handling.
@@ -40,7 +40,7 @@ Stingray is a simple, fun web API written in Go. It is designed to be open sourc
 ## Current Status
 
 - Stability 10/10
-- Usefulness 1/10
+- Usefulness 4/10
 
 ## Getting Started
 
@@ -136,6 +136,7 @@ Visit `http://localhost:6273` to access the web interface. The system includes:
 
 #### Engineer-mode Database Management
 - `GET /metadata/tables` - List all database tables (requires auth)
+- `GET /metadata/tables?engineer=true` - Engineer view showing all tables (engineer group only)
 - `GET /metadata/table/{table}` - View table data with pagination (requires auth)
 - `GET /metadata/edit/{table}/{id}` - Edit table row (requires auth)
 - `GET /metadata/edit/{table}/new` - Create new table row (requires auth)
@@ -160,6 +161,15 @@ The system supports multiple HTML templates:
 
 Templates support embedded template references using `{{template_name}}` syntax.
 
+### Public Access Control
+
+The system uses the special 'everyone' group to mark assets as publicly accessible:
+
+- **Public Pages**: Pages with 'everyone' in read_groups are accessible to all users, including unauthenticated visitors
+- **Public Tables**: Database tables with 'everyone' in read_groups can be viewed by all users
+- **Public Forms**: Forms and data with 'everyone' permissions are accessible without authentication
+- **Examples**: About page, login page, and other public content use the 'everyone' group
+
 ### User Management
 
 The system includes a complete user management system:
@@ -181,6 +191,7 @@ The system provides a powerful metadata-driven form generation system:
   - Default values and validation rules
 - **Dynamic Form Generation**: Forms are automatically generated based on field metadata
 - **Engineer Mode**: Toggle between user-friendly labels and technical field names
+- **Admin/Engineer Toggle**: Engineers can switch between normal view and engineer view showing all database tables
 - **Role-Based Permissions**: Granular access control for table operations
 - **CRUD Operations**: Create, read, update, and delete operations for any table
 - **Pagination**: Built-in pagination for large datasets
@@ -195,6 +206,7 @@ The system provides a powerful metadata-driven form generation system:
 - **Metadata-Driven Forms**: Configurable form generation based on field metadata
 - **Role-Based Access Control**: Granular permissions for table read/write operations
 - **Engineer Mode**: Technical view with raw field names and database types
+- **Engineer Toggle**: Engineers can view all database tables regardless of permissions
 
 ## Development
 
@@ -268,7 +280,10 @@ MIT License. See [LICENSE](LICENSE) for details.
 - [x] Add role-based access control
 - [x] Create RESTful API endpoints
 - [x] Add template system with embedded templates
-- [ ] Improve documentation
-- [ ] Implement rate limiting
-- [ ] Add usage examples
-- [ ] Create a demo frontend
+- [X] Improve documentation
+- [ ] Add an admin template and switch administration pages
+- [ ] Add settings table so features can be dynamically set without restart
+- [ ] add password reset
+- [ ] add 2FA with 6-digit code sent to email
+- [ ] make public nav menu dynamic
+- [ ] add left nav for admin pages

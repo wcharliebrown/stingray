@@ -10,21 +10,27 @@
 ### 2. Default Users Created
 - **Admin User**: `admin` (adminuser@servicecompany.net) - admin group
 - **Customer User**: `customer` (customeruser@company.com) - customers group
+- **Engineer User**: `engineer` (engineeruser@servicecompany.net) - engineer group
 
 ### 3. Role-Based Access Control
 - **Admin Group**: Full access to all pages and API endpoints
 - **Customers Group**: Limited access to FAQ page and basic functionality
-- **Middleware**: RoleMiddleware with RequireAuth, RequireGroup, RequireAdmin, RequireCustomer
+- **Engineer Group**: Technical access to database management and engineer toggle functionality
+- **Everyone Group**: Special group for marking assets as publicly accessible (includes unauthenticated users)
+- **Middleware**: RoleMiddleware with RequireAuth, RequireGroup, RequireAdmin, RequireCustomer, RequireEngineer
 
 ### 4. Protected Pages
 - **Orders Page** (`/page/orders`): Admin only - Orders management interface
 - **FAQ Page** (`/page/faq`): Customer only - Frequently asked questions
+- **Database Tables Page** (`/metadata/tables`): Admin and Engineer only - Database management with engineer toggle
+- **Public Pages** (`/page/about`, `/page/login`, `/`): Everyone (including unauthenticated) - Public content marked with 'everyone' group
 
 ### 5. API Endpoints
 - **GET /api/users**: Admin only - List all users (passwords excluded)
 - **GET /api/groups**: Admin only - List all groups
 - **GET /api/user-groups**: Admin only - Get groups for specific user
 - **GET /api/current-user**: Authenticated users - Current user info with groups
+- **GET /metadata/tables**: Admin and Engineer - List database tables with engineer toggle support
 
 ### 6. Authentication System
 - Database-based authentication
@@ -48,14 +54,17 @@
 - `handlers/api.go` - RESTful API endpoints
 - `tests/user_management_test.go` - Comprehensive test suite
 - `test_user_system.sh` - Automated test script
+- `test_engineer_toggle.sh` - Engineer toggle functionality test script
 - `USER_MANAGEMENT_README.md` - Detailed documentation
 
 #### Modified Files:
-- `database/operations.go` - Added user/group management functions
+- `database/operations.go` - Added user/group management functions and fixed session NULL handling
 - `database/connection.go` - Added GetDB() method for testing
 - `models/session.go` - Updated UserID to int type
 - `handlers/auth.go` - Updated to use database authentication
 - `handlers/session.go` - Fixed UserID type issues
+- `handlers/metadata.go` - Added engineer toggle functionality
+- `handlers/pages.go` - Updated navigation to include engineer group
 - `server.go` - Added new routes and handlers
 
 ### Database Schema Changes
@@ -110,16 +119,64 @@ CREATE TABLE _session (
 - Role-based access control
 - API endpoint functionality
 - Database operations
+- Engineer toggle functionality
 
-### Test Script
+### Test Scripts
 ```bash
 ./test_user_system.sh
+./test_engineer_toggle.sh
 ```
-The test script verifies:
-- Login functionality for both users
+
+### Test Scripts
+```bash
+./test_user_system.sh
+./test_engineer_toggle.sh
+```
+The test scripts verify:
+- Login functionality for all users (admin, customer, engineer)
 - API endpoint access
 - Role-based page access
 - Database initialization
+- Engineer toggle functionality
+- Navigation link visibility
+
+## 🌐 Public Access Control
+
+### Overview
+The system uses the special 'everyone' group to mark assets as publicly accessible. This allows unauthenticated users to access specific content while maintaining security for protected resources.
+
+### Features
+- **Public Pages**: Pages with 'everyone' in read_groups are accessible to all users
+- **Public Tables**: Database tables with 'everyone' permissions can be viewed by unauthenticated users
+- **Automatic Inclusion**: All users (authenticated and unauthenticated) are automatically in the 'everyone' group
+- **Security**: Maintains proper access control while allowing public content
+
+### Implementation
+- **Permission Checking**: System checks if 'everyone' is in read_groups for public access
+- **Database Design**: Tables include read_groups and write_groups columns for granular control
+- **Default Pages**: Home, about, and login pages are marked as public by default
+
+## 🔧 Engineer Toggle Functionality
+
+### Overview
+The Engineer Toggle provides engineers with a special view that shows all database tables regardless of their individual permissions. This feature is only available to users in the Engineer group.
+
+### Features
+- **Toggle Interface**: Engineers see an enabled toggle with "Admin View" and "Engineer View" options
+- **Disabled for Non-Engineers**: Other users see disabled toggle buttons with explanatory text
+- **All Tables Access**: Engineer mode bypasses permission filtering to show all database tables
+- **Visual Indicators**: Clear notice when in engineer mode
+- **Navigation Integration**: Engineers and admins see "Database Tables" link in navigation
+
+### Implementation Details
+- **Session Fix**: Fixed NULL value handling in session retrieval
+- **Permission Checking**: Uses `IsUserInGroup()` to verify engineer membership
+- **Template Updates**: Enhanced HTML templates with toggle functionality
+- **Navigation Updates**: Updated page handlers to include engineer group in navigation
+
+### API Endpoints
+- `GET /metadata/tables` - Normal view (filtered by permissions)
+- `GET /metadata/tables?engineer=true` - Engineer view (all tables)
 
 ## 🔒 Security Features
 

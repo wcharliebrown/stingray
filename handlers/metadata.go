@@ -38,55 +38,72 @@ func (h *MetadataHandler) HandleTableList(w http.ResponseWriter, r *http.Request
 	// Check if user is authenticated
 	isAuthenticated := h.sm.IsAuthenticated(r)
 	var userID int
+	var isEngineer bool
 	if isAuthenticated {
 		session, err := h.sm.GetSessionFromRequest(r)
 		if err == nil {
 			userID = session.UserID
+			// Check if user is in engineer group
+			isEngineer, _ = h.db.IsUserInGroup(userID, "engineer")
 		}
 	}
 
+	// Check if engineer mode is requested
+	engineerMode := r.URL.Query().Get("engineer") == "true" && isEngineer
+
 	// Filter tables based on user access
 	var accessibleTables []models.TableMetadata
-	for _, table := range tableMetadata {
-		hasAccess := false
-		
-		// Parse read groups
-		var readGroups []string
-		if table.ReadGroups != "" {
-			if err := json.Unmarshal([]byte(table.ReadGroups), &readGroups); err != nil {
-				continue
-			}
-		}
-
-		// Check access
-		if len(readGroups) == 0 {
-			hasAccess = true // No restrictions
-		} else {
-			for _, group := range readGroups {
-				// Everyone is automatically in the 'everyone' group
-				if group == "everyone" {
-					hasAccess = true
-					break
+	if engineerMode {
+		// In engineer mode, show all tables
+		accessibleTables = tableMetadata
+	} else {
+		// Normal mode - filter based on permissions
+		for _, table := range tableMetadata {
+			hasAccess := false
+			
+			// Parse read groups
+			var readGroups []string
+			if table.ReadGroups != "" {
+				if err := json.Unmarshal([]byte(table.ReadGroups), &readGroups); err != nil {
+					continue
 				}
-				// For authenticated users, check their groups
-				if isAuthenticated {
-					if inGroup, _ := h.db.IsUserInGroup(userID, group); inGroup {
+			}
+
+			// Check access
+			if len(readGroups) == 0 {
+				hasAccess = true // No restrictions
+			} else {
+				for _, group := range readGroups {
+					// Everyone is automatically in the 'everyone' group
+					if group == "everyone" {
 						hasAccess = true
 						break
 					}
+					// For authenticated users, check their groups
+					if isAuthenticated {
+						if inGroup, _ := h.db.IsUserInGroup(userID, group); inGroup {
+							hasAccess = true
+							break
+						}
+					}
 				}
 			}
-		}
 
-		if hasAccess {
-			accessibleTables = append(accessibleTables, table)
+			if hasAccess {
+				accessibleTables = append(accessibleTables, table)
+			}
 		}
 	}
 
 	// Check if JSON response is requested
 	if r.URL.Query().Get("response_format") == "json" {
+		response := map[string]interface{}{
+			"tables":       accessibleTables,
+			"is_engineer":  isEngineer,
+			"engineer_mode": engineerMode,
+		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(accessibleTables)
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 
@@ -102,6 +119,15 @@ func (h *MetadataHandler) HandleTableList(w http.ResponseWriter, r *http.Request
 			body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; margin: 0; padding: 2rem; }
 			.container { max-width: 1200px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
 			h1 { color: #2c3e50; margin-bottom: 1rem; }
+			.toggle-container { margin-bottom: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; border: 1px solid #e9ecef; }
+			.toggle-label { font-weight: 600; margin-bottom: 0.5rem; display: block; }
+			.toggle-buttons { display: flex; gap: 0.5rem; }
+			.toggle-btn { padding: 0.5rem 1rem; border: 1px solid #dee2e6; background: white; color: #6c757d; text-decoration: none; border-radius: 4px; cursor: pointer; }
+			.toggle-btn.active { background: #667eea; color: white; border-color: #667eea; }
+			.toggle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+			.toggle-btn:not(:disabled):hover { background: #e9ecef; }
+			.toggle-btn.active:hover { background: #5a6fd8; }
+			.engineer-mode-notice { background: #fff3cd; border: 1px solid #ffeaa7; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; color: #856404; }
 			.table-list { list-style: none; padding: 0; }
 			.table-item { padding: 1rem; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center; }
 			.table-item:last-child { border-bottom: none; }
@@ -118,8 +144,34 @@ func (h *MetadataHandler) HandleTableList(w http.ResponseWriter, r *http.Request
 	<body>
 		<div class="container">
 			<h1>Database Tables</h1>
+			
+			{{if .IsEngineer}}
+			<div class="toggle-container">
+				<label class="toggle-label">View Mode:</label>
+				<div class="toggle-buttons">
+					<a href="?" class="toggle-btn {{if not .EngineerMode}}active{{end}}">Admin View</a>
+					<a href="?engineer=true" class="toggle-btn {{if .EngineerMode}}active{{end}}">Engineer View</a>
+				</div>
+			</div>
+			{{else}}
+			<div class="toggle-container">
+				<label class="toggle-label">View Mode:</label>
+				<div class="toggle-buttons">
+					<button class="toggle-btn active" disabled>Admin View</button>
+					<button class="toggle-btn" disabled>Engineer View</button>
+				</div>
+				<small style="color: #6c757d; margin-top: 0.5rem; display: block;">Engineer view is only available to users in the Engineer group.</small>
+			</div>
+			{{end}}
+			
+			{{if .EngineerMode}}
+			<div class="engineer-mode-notice">
+				<strong>Engineer Mode:</strong> Showing all tables in the database, including system tables.
+			</div>
+			{{end}}
+			
 			<ul class="table-list">
-				{{range .}}
+				{{range .Tables}}
 				<li class="table-item">
 					<div class="table-info">
 						<div class="table-name">{{.DisplayName}}</div>
@@ -142,8 +194,14 @@ func (h *MetadataHandler) HandleTableList(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	data := map[string]interface{}{
+		"Tables":       accessibleTables,
+		"IsEngineer":   isEngineer,
+		"EngineerMode": engineerMode,
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	t.Execute(w, accessibleTables)
+	t.Execute(w, data)
 }
 
 // HandleTableData handles viewing table data
