@@ -5,8 +5,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"log"
+	"path/filepath"
 	"stingray/auth"
 	"stingray/models"
+	"strings"
 	"time"
 )
 
@@ -15,6 +18,7 @@ func (d *Database) initDatabase() error {
 	createDBQuery := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci", "stingray")
 	_, err := d.db.Exec(createDBQuery)
 	if err != nil {
+		LogSQLError(err)
 		return err
 	}
 
@@ -37,6 +41,7 @@ func (d *Database) initDatabase() error {
 
 	_, err = d.db.Exec(createTableQuery)
 	if err != nil {
+		LogSQLError(err)
 		return err
 	}
 
@@ -52,6 +57,7 @@ func (d *Database) initDatabase() error {
 
 	_, err = d.db.Exec(createGroupsTableQuery)
 	if err != nil {
+		LogSQLError(err)
 		return err
 	}
 
@@ -70,6 +76,7 @@ func (d *Database) initDatabase() error {
 
 	_, err = d.db.Exec(createUsersTableQuery)
 	if err != nil {
+		LogSQLError(err)
 		return err
 	}
 
@@ -88,6 +95,7 @@ func (d *Database) initDatabase() error {
 
 	_, err = d.db.Exec(createUserGroupsTableQuery)
 	if err != nil {
+		LogSQLError(err)
 		return err
 	}
 
@@ -109,15 +117,71 @@ func (d *Database) initDatabase() error {
 
 	_, err = d.db.Exec(createSessionsTableQuery)
 	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Create table_metadata table
+	createTableMetadataQuery := `
+	CREATE TABLE IF NOT EXISTS table_metadata (
+		id INT AUTO_INCREMENT PRIMARY KEY,
+		table_name VARCHAR(255) UNIQUE NOT NULL,
+		display_name VARCHAR(255) NOT NULL,
+		description TEXT,
+		read_groups TEXT,
+		write_groups TEXT,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		INDEX idx_table_name (table_name)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+
+	_, err = d.db.Exec(createTableMetadataQuery)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Create field_metadata table
+	createFieldMetadataQuery := `
+	CREATE TABLE IF NOT EXISTS field_metadata (
+		id INT AUTO_INCREMENT PRIMARY KEY,
+		table_name VARCHAR(255) NOT NULL,
+		field_name VARCHAR(255) NOT NULL,
+		display_name VARCHAR(255) NOT NULL,
+		description TEXT,
+		db_type VARCHAR(100) NOT NULL,
+		html_input_type VARCHAR(100) NOT NULL,
+		form_position INT DEFAULT 0,
+		list_position INT DEFAULT 0,
+		is_required BOOLEAN DEFAULT FALSE,
+		is_read_only BOOLEAN DEFAULT FALSE,
+		default_value TEXT,
+		validation_rules TEXT,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		UNIQUE KEY unique_table_field (table_name, field_name),
+		INDEX idx_table_name (table_name),
+		INDEX idx_field_name (field_name)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+
+	_, err = d.db.Exec(createFieldMetadataQuery)
+	if err != nil {
+		LogSQLError(err)
 		return err
 	}
 
 	// Initialize with default pages and users
 	if err := d.initializePages(); err != nil {
+		LogSQLError(err)
 		return err
 	}
 
-	return d.initializeUsers()
+	if err := d.initializeUsers(); err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	return d.initializeMetadata()
 }
 
 func (d *Database) initializePages() error {
@@ -128,8 +192,8 @@ func (d *Database) initializePages() error {
 			MetaDescription: "A modern content management system built with Go",
 			Header:         "Welcome to Sting Ray",
 			Navigation:     `<a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/user/login">Login</a>`,
-			MainContent:    `<h2>Welcome to Sting Ray</h2><p>This is a modern content management system built with Go and MySQL. Features include dynamic page serving, template system, and RESTful API endpoints.</p>`,
-			Sidebar:        `<h3>Quick Links</h3><ul><li><a href="/page/about">About</a></li><li><a href="/page/demo">Demo</a></li><li><a href="/user/login">Login</a></li></ul>`,
+			MainContent:    `<h2>Welcome to Sting Ray</h2><p>This is a modern content management system built with Go and MySQL. Features include dynamic page serving, template system, and RESTful API endpoints.</p><h3>New Features:</h3><ul><li><a href="/metadata/tables">Database Table Management</a> - View and edit database tables with metadata-driven forms</li><li>Role-based access control for table operations</li><li>Engineer mode for technical users</li></ul>`,
+			Sidebar:        `<h3>Quick Links</h3><ul><li><a href="/page/about">About</a></li><li><a href="/page/demo">Demo</a></li><li><a href="/user/login">Login</a></li><li><a href="/metadata/tables">Database Tables</a></li></ul>`,
 			Footer:         "© 2024 Sting Ray CMS",
 			CSSClass:       "modern",
 			Scripts:        "",
@@ -217,6 +281,7 @@ func (d *Database) initializePages() error {
 
 	for _, page := range pages {
 		if err := d.createPageIfNotExists(page); err != nil {
+			LogSQLError(err)
 			return err
 		}
 	}
@@ -229,6 +294,7 @@ func (d *Database) createPageIfNotExists(page models.Page) error {
 	var count int
 	err := d.db.QueryRow("SELECT COUNT(*) FROM pages WHERE slug = ?", page.Slug).Scan(&count)
 	if err != nil {
+		LogSQLError(err)
 		return err
 	}
 
@@ -238,7 +304,10 @@ func (d *Database) createPageIfNotExists(page models.Page) error {
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			page.Slug, page.Title, page.MetaDescription, page.Header, page.Navigation,
 			page.MainContent, page.Sidebar, page.Footer, page.CSSClass, page.Scripts, page.Template)
-		return err
+		if err != nil {
+			LogSQLError(err)
+			return err
+		}
 	}
 
 	return nil
@@ -253,6 +322,7 @@ func (d *Database) GetPage(slug string) (*models.Page, error) {
 		&page.Navigation, &page.MainContent, &page.Sidebar, &page.Footer,
 		&page.CSSClass, &page.Scripts, &page.Template)
 	if err != nil {
+		LogSQLError(err)
 		return nil, err
 	}
 	return &page, nil
@@ -263,6 +333,7 @@ func (d *Database) GetAllPages() ([]models.Page, error) {
 		SELECT id, slug, title, meta_description, header, navigation, main_content, sidebar, footer, css_class, scripts, template
 		FROM pages ORDER BY slug`)
 	if err != nil {
+		LogSQLError(err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -275,6 +346,7 @@ func (d *Database) GetAllPages() ([]models.Page, error) {
 			&page.Navigation, &page.MainContent, &page.Sidebar, &page.Footer,
 			&page.CSSClass, &page.Scripts, &page.Template)
 		if err != nil {
+			LogSQLError(err)
 			return nil, err
 		}
 		pages = append(pages, page)
@@ -296,6 +368,7 @@ func (d *Database) CreateSession(userID int, username string, duration time.Dura
 		VALUES (?, ?, ?, ?, TRUE)`,
 		sessionID, userID, username, expiresAt)
 	if err != nil {
+		LogSQLError(err)
 		return nil, err
 	}
 
@@ -320,6 +393,7 @@ func (d *Database) GetSession(sessionID string) (*models.Session, error) {
 		&session.ID, &session.SessionID, &session.UserID, &session.Username,
 		&session.CreatedAt, &session.ExpiresAt, &session.IsActive)
 	if err != nil {
+		LogSQLError(err)
 		return nil, err
 	}
 	return &session, nil
@@ -329,13 +403,21 @@ func (d *Database) InvalidateSession(sessionID string) error {
 	_, err := d.db.Exec(`
 		UPDATE sessions SET is_active = FALSE WHERE session_id = ?`,
 		sessionID)
-	return err
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	return nil
 }
 
 func (d *Database) CleanupExpiredSessions() error {
 	_, err := d.db.Exec(`
 		UPDATE sessions SET is_active = FALSE WHERE expires_at <= NOW()`)
-	return err
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	return nil
 }
 
 func generateSessionID() (string, error) {
@@ -362,6 +444,7 @@ func (d *Database) initializeUsers() error {
 
 	for _, group := range groups {
 		if err := d.createGroupIfNotExists(group); err != nil {
+			LogSQLError(err)
 			return err
 		}
 	}
@@ -406,6 +489,7 @@ func (d *Database) initializeUsers() error {
 		userData.user.Password = hashedPassword
 		
 		if err := d.createUserIfNotExists(userData.user, userData.groups); err != nil {
+			LogSQLError(err)
 			return err
 		}
 	}
@@ -418,6 +502,7 @@ func (d *Database) createGroupIfNotExists(group models.Group) error {
 	var count int
 	err := d.db.QueryRow("SELECT COUNT(*) FROM user_groups_table WHERE name = ?", group.Name).Scan(&count)
 	if err != nil {
+		LogSQLError(err)
 		return err
 	}
 
@@ -426,7 +511,10 @@ func (d *Database) createGroupIfNotExists(group models.Group) error {
 			INSERT INTO user_groups_table (name, description)
 			VALUES (?, ?)`,
 			group.Name, group.Description)
-		return err
+		if err != nil {
+			LogSQLError(err)
+			return err
+		}
 	}
 
 	return nil
@@ -437,6 +525,7 @@ func (d *Database) createUserIfNotExists(user models.User, groupNames []string) 
 	var count int
 	err := d.db.QueryRow("SELECT COUNT(*) FROM users WHERE username = ?", user.Username).Scan(&count)
 	if err != nil {
+		LogSQLError(err)
 		return err
 	}
 
@@ -447,17 +536,20 @@ func (d *Database) createUserIfNotExists(user models.User, groupNames []string) 
 			VALUES (?, ?, ?)`,
 			user.Username, user.Email, user.Password)
 		if err != nil {
+			LogSQLError(err)
 			return err
 		}
 
 		userID, err := result.LastInsertId()
 		if err != nil {
+			LogSQLError(err)
 			return err
 		}
 
 		// Add user to groups
 		for _, groupName := range groupNames {
 			if err := d.addUserToGroup(int(userID), groupName); err != nil {
+				LogSQLError(err)
 				return err
 			}
 		}
@@ -471,6 +563,7 @@ func (d *Database) addUserToGroup(userID int, groupName string) error {
 	var groupID int
 	err := d.db.QueryRow("SELECT id FROM user_groups_table WHERE name = ?", groupName).Scan(&groupID)
 	if err != nil {
+		LogSQLError(err)
 		return err
 	}
 
@@ -478,6 +571,7 @@ func (d *Database) addUserToGroup(userID int, groupName string) error {
 	var count int
 	err = d.db.QueryRow("SELECT COUNT(*) FROM user_groups WHERE user_id = ? AND group_id = ?", userID, groupID).Scan(&count)
 	if err != nil {
+		LogSQLError(err)
 		return err
 	}
 
@@ -486,7 +580,10 @@ func (d *Database) addUserToGroup(userID int, groupName string) error {
 			INSERT INTO user_groups (user_id, group_id)
 			VALUES (?, ?)`,
 			userID, groupID)
-		return err
+		if err != nil {
+			LogSQLError(err)
+			return err
+		}
 	}
 
 	return nil
@@ -506,16 +603,19 @@ func (d *Database) CreateUser(username, email, password string) error {
 		VALUES (?, ?, ?)`,
 		username, email, hashedPassword)
 	if err != nil {
+		LogSQLError(err)
 		return fmt.Errorf("failed to create user: %w", err)
 	}
 
 	userID, err := result.LastInsertId()
 	if err != nil {
+		LogSQLError(err)
 		return fmt.Errorf("failed to get user ID: %w", err)
 	}
 
 	// Add user to default group (customers)
 	if err := d.addUserToGroup(int(userID), "customers"); err != nil {
+		LogSQLError(err)
 		return fmt.Errorf("failed to add user to default group: %w", err)
 	}
 
@@ -533,6 +633,7 @@ func (d *Database) UpdateUserPassword(userID int, newPassword string) error {
 	// Update the password in database
 	_, err = d.db.Exec("UPDATE users SET password = ? WHERE id = ?", hashedPassword, userID)
 	if err != nil {
+		LogSQLError(err)
 		return fmt.Errorf("failed to update password: %w", err)
 	}
 
@@ -548,6 +649,7 @@ func (d *Database) AuthenticateUser(username, password string) (*models.User, er
 		&user.ID, &user.Username, &user.Email, &user.Password,
 		&user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
+		LogSQLError(err)
 		return nil, err
 	}
 
@@ -564,6 +666,7 @@ func (d *Database) AuthenticateUser(username, password string) (*models.User, er
 			// Update the password in database
 			_, err = d.db.Exec("UPDATE users SET password = ? WHERE id = ?", hashedPassword, user.ID)
 			if err != nil {
+				LogSQLError(err)
 				return nil, fmt.Errorf("failed to update password hash: %w", err)
 			}
 			
@@ -576,6 +679,7 @@ func (d *Database) AuthenticateUser(username, password string) (*models.User, er
 	// Verify password against hash
 	valid, err := auth.CheckPassword(password, user.Password)
 	if err != nil {
+		LogSQLError(err)
 		return nil, fmt.Errorf("failed to verify password: %w", err)
 	}
 	
@@ -595,6 +699,7 @@ func (d *Database) GetUserByID(userID int) (*models.User, error) {
 		&user.ID, &user.Username, &user.Email, &user.Password,
 		&user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
+		LogSQLError(err)
 		return nil, err
 	}
 	return &user, nil
@@ -609,6 +714,7 @@ func (d *Database) GetUserGroups(userID int) ([]models.Group, error) {
 		ORDER BY g.name`,
 		userID)
 	if err != nil {
+		LogSQLError(err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -619,6 +725,7 @@ func (d *Database) GetUserGroups(userID int) ([]models.Group, error) {
 		err := rows.Scan(
 			&group.ID, &group.Name, &group.Description, &group.CreatedAt)
 		if err != nil {
+			LogSQLError(err)
 			return nil, err
 		}
 		groups = append(groups, group)
@@ -635,6 +742,7 @@ func (d *Database) IsUserInGroup(userID int, groupName string) (bool, error) {
 		WHERE ug.user_id = ? AND g.name = ?`,
 		userID, groupName).Scan(&count)
 	if err != nil {
+		LogSQLError(err)
 		return false, err
 	}
 	return count > 0, nil
@@ -646,6 +754,7 @@ func (d *Database) GetAllGroups() ([]models.Group, error) {
 		FROM user_groups_table
 		ORDER BY name`)
 	if err != nil {
+		LogSQLError(err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -656,6 +765,7 @@ func (d *Database) GetAllGroups() ([]models.Group, error) {
 		err := rows.Scan(
 			&group.ID, &group.Name, &group.Description, &group.CreatedAt)
 		if err != nil {
+			LogSQLError(err)
 			return nil, err
 		}
 		groups = append(groups, group)
@@ -669,6 +779,7 @@ func (d *Database) GetAllUsers() ([]models.User, error) {
 		FROM users
 		ORDER BY username`)
 	if err != nil {
+		LogSQLError(err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -680,9 +791,704 @@ func (d *Database) GetAllUsers() ([]models.User, error) {
 			&user.ID, &user.Username, &user.Email, &user.Password,
 			&user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
+			LogSQLError(err)
 			return nil, err
 		}
 		users = append(users, user)
 	}
 	return users, nil
+} 
+
+// Metadata operations
+
+// GetTableMetadata retrieves metadata for a specific table
+func (d *Database) GetTableMetadata(tableName string) (*models.TableMetadata, error) {
+	var metadata models.TableMetadata
+	err := d.db.QueryRow(`
+		SELECT id, table_name, display_name, description, read_groups, write_groups, created_at, updated_at
+		FROM table_metadata WHERE table_name = ?`,
+		tableName).Scan(
+		&metadata.ID, &metadata.TableName, &metadata.DisplayName, &metadata.Description,
+		&metadata.ReadGroups, &metadata.WriteGroups, &metadata.CreatedAt, &metadata.UpdatedAt)
+	if err != nil {
+		LogSQLError(err)
+		return nil, err
+	}
+	return &metadata, nil
+}
+
+// GetAllTableMetadata retrieves metadata for all tables
+func (d *Database) GetAllTableMetadata() ([]models.TableMetadata, error) {
+	rows, err := d.db.Query(`
+		SELECT id, table_name, display_name, description, read_groups, write_groups, created_at, updated_at
+		FROM table_metadata ORDER BY table_name`)
+	if err != nil {
+		LogSQLError(err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var metadata []models.TableMetadata
+	for rows.Next() {
+		var item models.TableMetadata
+		err := rows.Scan(
+			&item.ID, &item.TableName, &item.DisplayName, &item.Description,
+			&item.ReadGroups, &item.WriteGroups, &item.CreatedAt, &item.UpdatedAt)
+		if err != nil {
+			LogSQLError(err)
+			return nil, err
+		}
+		metadata = append(metadata, item)
+	}
+	return metadata, nil
+}
+
+// CreateTableMetadata creates new table metadata
+func (d *Database) CreateTableMetadata(metadata *models.TableMetadata) error {
+	_, err := d.db.Exec(`
+		INSERT INTO table_metadata (table_name, display_name, description, read_groups, write_groups)
+		VALUES (?, ?, ?, ?, ?)`,
+		metadata.TableName, metadata.DisplayName, metadata.Description,
+		metadata.ReadGroups, metadata.WriteGroups)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	return nil
+}
+
+// UpdateTableMetadata updates existing table metadata
+func (d *Database) UpdateTableMetadata(metadata *models.TableMetadata) error {
+	_, err := d.db.Exec(`
+		UPDATE table_metadata 
+		SET display_name = ?, description = ?, read_groups = ?, write_groups = ?
+		WHERE table_name = ?`,
+		metadata.DisplayName, metadata.Description, metadata.ReadGroups, metadata.WriteGroups, metadata.TableName)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	return nil
+}
+
+// GetFieldMetadata retrieves metadata for fields of a specific table
+func (d *Database) GetFieldMetadata(tableName string) ([]models.FieldMetadata, error) {
+	rows, err := d.db.Query(`
+		SELECT id, table_name, field_name, display_name, description, db_type, html_input_type,
+		       form_position, list_position, is_required, is_read_only, default_value, validation_rules,
+		       created_at, updated_at
+		FROM field_metadata WHERE table_name = ? ORDER BY form_position, field_name`,
+		tableName)
+	if err != nil {
+		LogSQLError(err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var metadata []models.FieldMetadata
+	for rows.Next() {
+		var item models.FieldMetadata
+		err := rows.Scan(
+			&item.ID, &item.TableName, &item.FieldName, &item.DisplayName, &item.Description,
+			&item.DBType, &item.HTMLInputType, &item.FormPosition, &item.ListPosition,
+			&item.IsRequired, &item.IsReadOnly, &item.DefaultValue, &item.ValidationRules,
+			&item.CreatedAt, &item.UpdatedAt)
+		if err != nil {
+			LogSQLError(err)
+			return nil, err
+		}
+		metadata = append(metadata, item)
+	}
+	return metadata, nil
+}
+
+// GetFieldMetadataByField retrieves metadata for a specific field
+func (d *Database) GetFieldMetadataByField(tableName, fieldName string) (*models.FieldMetadata, error) {
+	var metadata models.FieldMetadata
+	err := d.db.QueryRow(`
+		SELECT id, table_name, field_name, display_name, description, db_type, html_input_type,
+		       form_position, list_position, is_required, is_read_only, default_value, validation_rules,
+		       created_at, updated_at
+		FROM field_metadata WHERE table_name = ? AND field_name = ?`,
+		tableName, fieldName).Scan(
+		&metadata.ID, &metadata.TableName, &metadata.FieldName, &metadata.DisplayName, &metadata.Description,
+		&metadata.DBType, &metadata.HTMLInputType, &metadata.FormPosition, &metadata.ListPosition,
+		&metadata.IsRequired, &metadata.IsReadOnly, &metadata.DefaultValue, &metadata.ValidationRules,
+		&metadata.CreatedAt, &metadata.UpdatedAt)
+	if err != nil {
+		LogSQLError(err)
+		return nil, err
+	}
+	return &metadata, nil
+}
+
+// CreateFieldMetadata creates new field metadata
+func (d *Database) CreateFieldMetadata(metadata *models.FieldMetadata) error {
+	_, err := d.db.Exec(`
+		INSERT INTO field_metadata (table_name, field_name, display_name, description, db_type, html_input_type,
+		                           form_position, list_position, is_required, is_read_only, default_value, validation_rules)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		metadata.TableName, metadata.FieldName, metadata.DisplayName, metadata.Description,
+		metadata.DBType, metadata.HTMLInputType, metadata.FormPosition, metadata.ListPosition,
+		metadata.IsRequired, metadata.IsReadOnly, metadata.DefaultValue, metadata.ValidationRules)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	return nil
+}
+
+// UpdateFieldMetadata updates existing field metadata
+func (d *Database) UpdateFieldMetadata(metadata *models.FieldMetadata) error {
+	_, err := d.db.Exec(`
+		UPDATE field_metadata 
+		SET display_name = ?, description = ?, db_type = ?, html_input_type = ?,
+		    form_position = ?, list_position = ?, is_required = ?, is_read_only = ?,
+		    default_value = ?, validation_rules = ?
+		WHERE table_name = ? AND field_name = ?`,
+		metadata.DisplayName, metadata.Description, metadata.DBType, metadata.HTMLInputType,
+		metadata.FormPosition, metadata.ListPosition, metadata.IsRequired, metadata.IsReadOnly,
+		metadata.DefaultValue, metadata.ValidationRules, metadata.TableName, metadata.FieldName)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	return nil
+}
+
+// GetTableRows retrieves rows from a specific table with pagination
+func (d *Database) GetTableRows(tableName string, page, pageSize int) ([]models.TableRow, int, error) {
+	// Get total count
+	var total int
+	err := d.db.QueryRow("SELECT COUNT(*) FROM `"+tableName+"`").Scan(&total)
+	if err != nil {
+		LogSQLError(err)
+		return nil, 0, err
+	}
+
+	// Get rows with pagination
+	offset := (page - 1) * pageSize
+	rows, err := d.db.Query("SELECT * FROM `"+tableName+"` LIMIT ? OFFSET ?", pageSize, offset)
+	if err != nil {
+		LogSQLError(err)
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	// Get column names
+	columns, err := rows.Columns()
+	if err != nil {
+		LogSQLError(err)
+		return nil, 0, err
+	}
+
+	var tableRows []models.TableRow
+	for rows.Next() {
+		// Create a slice of interface{} to hold the values
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range values {
+			valuePtrs[i] = &values[i]
+		}
+
+		// Scan the row
+		err := rows.Scan(valuePtrs...)
+		if err != nil {
+			LogSQLError(err)
+			return nil, 0, err
+		}
+
+		// Convert to map
+		rowData := make(map[string]interface{})
+		for i, col := range columns {
+			val := values[i]
+			if val != nil {
+				// Convert []uint8 to string for display
+				if b, ok := val.([]uint8); ok {
+					rowData[col] = string(b)
+				} else {
+					rowData[col] = val
+				}
+			}
+		}
+
+		// Get ID if it exists
+		id := 0
+		if idVal, exists := rowData["id"]; exists {
+			if idInt, ok := idVal.(int64); ok {
+				id = int(idInt)
+			} else if idInt, ok := idVal.(int); ok {
+				id = idInt
+			}
+		}
+
+		tableRows = append(tableRows, models.TableRow{
+			ID:   id,
+			Data: rowData,
+		})
+	}
+
+	return tableRows, total, nil
+}
+
+// GetTableRow retrieves a specific row from a table
+func (d *Database) GetTableRow(tableName string, id int) (*models.TableRow, error) {
+	rows, err := d.db.Query("SELECT * FROM `"+tableName+"` WHERE id = ?", id)
+	if err != nil {
+		LogSQLError(err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return nil, fmt.Errorf("row not found")
+	}
+
+	// Get column names
+	columns, err := rows.Columns()
+	if err != nil {
+		LogSQLError(err)
+		return nil, err
+	}
+
+	// Create a slice of interface{} to hold the values
+	values := make([]interface{}, len(columns))
+	valuePtrs := make([]interface{}, len(columns))
+	for i := range values {
+		valuePtrs[i] = &values[i]
+	}
+
+	// Scan the row
+	err = rows.Scan(valuePtrs...)
+	if err != nil {
+		LogSQLError(err)
+		return nil, err
+	}
+
+	// Convert to map
+	rowData := make(map[string]interface{})
+	for i, col := range columns {
+		val := values[i]
+		if val != nil {
+			// Convert []uint8 to string for display
+			if b, ok := val.([]uint8); ok {
+				rowData[col] = string(b)
+			} else {
+				rowData[col] = val
+			}
+		}
+	}
+
+	return &models.TableRow{
+		ID:   id,
+		Data: rowData,
+	}, nil
+}
+
+// CreateTableRow creates a new row in a table
+func (d *Database) CreateTableRow(tableName string, data map[string]interface{}) error {
+	// Build dynamic INSERT query
+	var columns []string
+	var placeholders []string
+	var values []interface{}
+
+	for col, val := range data {
+		columns = append(columns, "`"+col+"`")
+		placeholders = append(placeholders, "?")
+		values = append(values, val)
+	}
+
+	query := "INSERT INTO `" + tableName + "` (" + strings.Join(columns, ", ") + ") VALUES (" + strings.Join(placeholders, ", ") + ")"
+	_, err := d.db.Exec(query, values...)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	return nil
+}
+
+// UpdateTableRow updates an existing row in a table
+func (d *Database) UpdateTableRow(tableName string, id int, data map[string]interface{}) error {
+	// Build dynamic UPDATE query
+	var setClauses []string
+	var values []interface{}
+
+	for col, val := range data {
+		setClauses = append(setClauses, "`"+col+"` = ?")
+		values = append(values, val)
+	}
+
+	values = append(values, id)
+	query := "UPDATE `" + tableName + "` SET " + strings.Join(setClauses, ", ") + " WHERE id = ?"
+	_, err := d.db.Exec(query, values...)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	return nil
+}
+
+// DeleteTableRow deletes a row from a table
+func (d *Database) DeleteTableRow(tableName string, id int) error {
+	_, err := d.db.Exec("DELETE FROM `"+tableName+"` WHERE id = ?", id)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	return nil
+}
+
+// GetTableSchema retrieves the schema information for a table
+func (d *Database) GetTableSchema(tableName string) ([]string, error) {
+	rows, err := d.db.Query("DESCRIBE `" + tableName + "`")
+	if err != nil {
+		LogSQLError(err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var columns []string
+	for rows.Next() {
+		var field, typ, null, key, defaultVal, extra string
+		err := rows.Scan(&field, &typ, &null, &key, &defaultVal, &extra)
+		if err != nil {
+			LogSQLError(err)
+			return nil, err
+		}
+		columns = append(columns, field)
+	}
+
+	return columns, nil
+}
+
+// initializeMetadata creates default metadata for existing tables
+func (d *Database) initializeMetadata() error {
+	// Initialize metadata for users table
+	usersMetadata := &models.TableMetadata{
+		TableName:   "users",
+		DisplayName: "Users",
+		Description: "User accounts and authentication information",
+		ReadGroups:  `["admin"]`,
+		WriteGroups: `["admin"]`,
+	}
+
+	if err := d.createTableMetadataIfNotExists(usersMetadata); err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Initialize field metadata for users table
+	usersFields := []models.FieldMetadata{
+		{
+			TableName:     "users",
+			FieldName:     "id",
+			DisplayName:   "ID",
+			Description:   "Unique identifier",
+			DBType:        "INT",
+			HTMLInputType: "number",
+			FormPosition:  0,
+			ListPosition:  0,
+			IsRequired:    true,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     "users",
+			FieldName:     "username",
+			DisplayName:   "Username",
+			Description:   "User login name",
+			DBType:        "VARCHAR",
+			HTMLInputType: "text",
+			FormPosition:  1,
+			ListPosition:  1,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "users",
+			FieldName:     "email",
+			DisplayName:   "Email",
+			Description:   "User email address",
+			DBType:        "VARCHAR",
+			HTMLInputType: "email",
+			FormPosition:  2,
+			ListPosition:  2,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "users",
+			FieldName:     "password",
+			DisplayName:   "Password",
+			Description:   "Hashed password",
+			DBType:        "VARCHAR",
+			HTMLInputType: "password",
+			FormPosition:  3,
+			ListPosition:  -1, // Don't show in list
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "users",
+			FieldName:     "created_at",
+			DisplayName:   "Created At",
+			Description:   "Account creation date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  4,
+			ListPosition:  3,
+			IsRequired:    false,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     "users",
+			FieldName:     "updated_at",
+			DisplayName:   "Updated At",
+			Description:   "Last update date",
+			DBType:        "TIMESTAMP",
+			HTMLInputType: "datetime-local",
+			FormPosition:  5,
+			ListPosition:  4,
+			IsRequired:    false,
+			IsReadOnly:    true,
+		},
+	}
+
+	for _, field := range usersFields {
+		if err := d.createFieldMetadataIfNotExists(&field); err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	// Initialize metadata for pages table
+	pagesMetadata := &models.TableMetadata{
+		TableName:   "pages",
+		DisplayName: "Pages",
+		Description: "Content pages and templates",
+		ReadGroups:  `["admin", "customers"]`,
+		WriteGroups: `["admin"]`,
+	}
+
+	if err := d.createTableMetadataIfNotExists(pagesMetadata); err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Initialize field metadata for pages table
+	pagesFields := []models.FieldMetadata{
+		{
+			TableName:     "pages",
+			FieldName:     "id",
+			DisplayName:   "ID",
+			Description:   "Unique identifier",
+			DBType:        "INT",
+			HTMLInputType: "number",
+			FormPosition:  0,
+			ListPosition:  0,
+			IsRequired:    true,
+			IsReadOnly:    true,
+		},
+		{
+			TableName:     "pages",
+			FieldName:     "slug",
+			DisplayName:   "Slug",
+			Description:   "URL-friendly identifier",
+			DBType:        "VARCHAR",
+			HTMLInputType: "text",
+			FormPosition:  1,
+			ListPosition:  1,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "pages",
+			FieldName:     "title",
+			DisplayName:   "Title",
+			Description:   "Page title",
+			DBType:        "VARCHAR",
+			HTMLInputType: "text",
+			FormPosition:  2,
+			ListPosition:  2,
+			IsRequired:    true,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "pages",
+			FieldName:     "meta_description",
+			DisplayName:   "Meta Description",
+			Description:   "SEO meta description",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  3,
+			ListPosition:  -1, // Don't show in list
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "pages",
+			FieldName:     "header",
+			DisplayName:   "Header",
+			Description:   "Page header content",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  4,
+			ListPosition:  -1,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "pages",
+			FieldName:     "navigation",
+			DisplayName:   "Navigation",
+			Description:   "Navigation menu HTML",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  5,
+			ListPosition:  -1,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "pages",
+			FieldName:     "main_content",
+			DisplayName:   "Main Content",
+			Description:   "Main page content",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  6,
+			ListPosition:  -1,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "pages",
+			FieldName:     "sidebar",
+			DisplayName:   "Sidebar",
+			Description:   "Sidebar content",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  7,
+			ListPosition:  -1,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "pages",
+			FieldName:     "footer",
+			DisplayName:   "Footer",
+			Description:   "Footer content",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  8,
+			ListPosition:  -1,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "pages",
+			FieldName:     "css_class",
+			DisplayName:   "CSS Class",
+			Description:   "CSS class for styling",
+			DBType:        "VARCHAR",
+			HTMLInputType: "text",
+			FormPosition:  9,
+			ListPosition:  3,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "pages",
+			FieldName:     "scripts",
+			DisplayName:   "Scripts",
+			Description:   "JavaScript code",
+			DBType:        "TEXT",
+			HTMLInputType: "textarea",
+			FormPosition:  10,
+			ListPosition:  -1,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+		{
+			TableName:     "pages",
+			FieldName:     "template",
+			DisplayName:   "Template",
+			Description:   "Template name",
+			DBType:        "VARCHAR",
+			HTMLInputType: "text",
+			FormPosition:  11,
+			ListPosition:  4,
+			IsRequired:    false,
+			IsReadOnly:    false,
+		},
+	}
+
+	for _, field := range pagesFields {
+		if err := d.createFieldMetadataIfNotExists(&field); err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// createTableMetadataIfNotExists creates table metadata if it doesn't exist
+func (d *Database) createTableMetadataIfNotExists(metadata *models.TableMetadata) error {
+	// Check if metadata exists
+	var count int
+	err := d.db.QueryRow("SELECT COUNT(*) FROM table_metadata WHERE table_name = ?", metadata.TableName).Scan(&count)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	if count == 0 {
+		if err := d.CreateTableMetadata(metadata); err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// createFieldMetadataIfNotExists creates field metadata if it doesn't exist
+func (d *Database) createFieldMetadataIfNotExists(metadata *models.FieldMetadata) error {
+	// Check if metadata exists
+	var count int
+	err := d.db.QueryRow("SELECT COUNT(*) FROM field_metadata WHERE table_name = ? AND field_name = ?", 
+		metadata.TableName, metadata.FieldName).Scan(&count)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	if count == 0 {
+		if err := d.CreateFieldMetadata(metadata); err != nil {
+			LogSQLError(err)
+			return err
+		}
+	}
+
+	return nil
+} 
+
+// LogSQLError logs SQL errors to logs/db_errors.log, creating the directory if needed
+func LogSQLError(err error) {
+	if err == nil {
+		return
+	}
+	logDir := "logs"
+	logFile := filepath.Join(logDir, "db_errors.log")
+	if _, statErr := os.Stat(logDir); os.IsNotExist(statErr) {
+		os.MkdirAll(logDir, 0755)
+	}
+	f, fileErr := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if fileErr != nil {
+		log.Printf("Failed to open log file: %v", fileErr)
+		return
+	}
+	defer f.Close()
+	logger := log.New(f, "SQL_ERROR: ", log.LstdFlags)
+	logger.Println(err.Error())
 } 

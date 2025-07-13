@@ -16,6 +16,7 @@ type Server struct {
 	sessionMW   *handlers.SessionMiddleware
 	roleMW      *handlers.RoleMiddleware
 	apiHandler  *handlers.APIHandler
+	metadataHandler *handlers.MetadataHandler
 }
 
 func NewServer(db *database.Database) *Server {
@@ -31,6 +32,7 @@ func NewServer(db *database.Database) *Server {
 		sessionMW:   sessionMW,
 		roleMW:      roleMW,
 		apiHandler:  apiHandler,
+		metadataHandler: handlers.NewMetadataHandler(db),
 	}
 
 	// Page routes with optional auth middleware
@@ -55,6 +57,12 @@ func NewServer(db *database.Database) *Server {
 	mux.HandleFunc("/api/groups", apiHandler.HandleGetGroups)
 	mux.HandleFunc("/api/user-groups", apiHandler.HandleGetUserGroups)
 	mux.HandleFunc("/api/current-user", apiHandler.HandleGetCurrentUser)
+
+	// Metadata routes
+	mux.HandleFunc("/metadata/tables", sessionMW.RequireAuth(server.metadataHandler.HandleTableList))
+	mux.HandleFunc("/metadata/table/", sessionMW.RequireAuth(server.metadataHandler.HandleTableData))
+	mux.HandleFunc("/metadata/edit/", sessionMW.RequireAuth(server.metadataHandler.HandleEditRow))
+	mux.HandleFunc("/metadata/delete/", sessionMW.RequireAuth(server.metadataHandler.HandleDeleteRow))
 
 	server.server = &http.Server{
 		Addr:    ":6273",

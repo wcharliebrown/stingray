@@ -8,6 +8,7 @@
 *.so
 *.dylib
 stingray
+main
 
 # Macos garbage
 .DS_Store
@@ -34,3 +35,7 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Logs
+logs/*log*
+

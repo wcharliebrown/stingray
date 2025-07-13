@@ -41,6 +41,7 @@ func (h *APIHandler) HandleGetUsers(w http.ResponseWriter, r *http.Request) {
 	h.rm.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
 		users, err := h.db.GetAllUsers()
 		if err != nil {
+			database.LogSQLError(err)
 			response := APIResponse{
 				Success: false,
 				Error:   "Failed to retrieve users: " + err.Error(),
@@ -91,6 +92,7 @@ func (h *APIHandler) HandleGetGroups(w http.ResponseWriter, r *http.Request) {
 	h.rm.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
 		groups, err := h.db.GetAllGroups()
 		if err != nil {
+			database.LogSQLError(err)
 			response := APIResponse{
 				Success: false,
 				Error:   "Failed to retrieve groups: " + err.Error(),
@@ -145,6 +147,7 @@ func (h *APIHandler) HandleGetUserGroups(w http.ResponseWriter, r *http.Request)
 
 		groups, err := h.db.GetUserGroups(userID)
 		if err != nil {
+			database.LogSQLError(err)
 			response := APIResponse{
 				Success: false,
 				Error:   "Failed to retrieve user groups: " + err.Error(),
@@ -187,6 +190,7 @@ func (h *APIHandler) HandleGetCurrentUser(w http.ResponseWriter, r *http.Request
 
 		user, err := h.db.GetUserByID(session.UserID)
 		if err != nil {
+			database.LogSQLError(err)
 			response := APIResponse{
 				Success: false,
 				Error:   "Failed to get user: " + err.Error(),
@@ -199,6 +203,7 @@ func (h *APIHandler) HandleGetCurrentUser(w http.ResponseWriter, r *http.Request
 
 		groups, err := h.db.GetUserGroups(user.ID)
 		if err != nil {
+			database.LogSQLError(err)
 			response := APIResponse{
 				Success: false,
 				Error:   "Failed to get user groups: " + err.Error(),

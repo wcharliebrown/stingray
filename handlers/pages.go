@@ -32,6 +32,7 @@ func (h *PageHandler) HandleHome(w http.ResponseWriter, r *http.Request) {
 
 	page, err := h.db.GetPage("home")
 	if err != nil {
+		database.LogSQLError(err)
 		http.Error(w, "Page not found", http.StatusNotFound)
 		return
 	}
@@ -69,6 +70,7 @@ func (h *PageHandler) HandlePage(w http.ResponseWriter, r *http.Request) {
 
 	page, err := h.db.GetPage(path)
 	if err != nil {
+		database.LogSQLError(err)
 		RenderMessage(w, "404 Not Found", "Page Not Found", "error", "The page you requested does not exist.", "/", "Go Home", http.StatusNotFound)
 		return
 	}
@@ -113,6 +115,7 @@ func (h *PageHandler) HandlePage(w http.ResponseWriter, r *http.Request) {
 func (h *PageHandler) HandlePages(w http.ResponseWriter, r *http.Request) {
 	pages, err := h.db.GetAllPages()
 	if err != nil {
+		database.LogSQLError(err)
 		http.Error(w, "Error fetching pages", http.StatusInternalServerError)
 		return
 	}
@@ -233,6 +236,7 @@ func (h *PageHandler) HandleTemplate(w http.ResponseWriter, r *http.Request) {
 
 	templateContent, err := templates.LoadTemplate(templateName)
 	if err != nil {
+		database.LogSQLError(err)
 		RenderMessage(w, "404 Not Found", "Template Not Found", "error", "The requested template does not exist.", "/templates", "View Templates", http.StatusNotFound)
 		return
 	}

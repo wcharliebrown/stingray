@@ -31,6 +31,7 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 	page, err := h.db.GetPage("login")
 	if err != nil {
+		database.LogSQLError(err)
 		RenderMessage(w, "Login Page Not Found", "Login Page Not Found", "error", "The login page could not be found.", "/", "Go Home", http.StatusNotFound)
 		return
 	}
@@ -70,6 +71,7 @@ func (h *AuthHandler) HandleLoginPost(w http.ResponseWriter, r *http.Request) {
 	// Authenticate user against database
 	user, err := h.db.AuthenticateUser(username, password)
 	if err != nil {
+		database.LogSQLError(err)
 		data.Title = "Login Failed - Sting Ray"
 		data.MetaDescription = "Login failed"
 		data.Header = "Login Failed"
@@ -81,6 +83,7 @@ func (h *AuthHandler) HandleLoginPost(w http.ResponseWriter, r *http.Request) {
 		// Create session
 		session, err := h.db.CreateSession(user.ID, user.Username, SessionDuration)
 		if err != nil {
+			database.LogSQLError(err)
 			data.Title = "Login Error - Sting Ray"
 			data.MetaDescription = "Login error"
 			data.Header = "Login Error"

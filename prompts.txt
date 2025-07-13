@@ -54,3 +54,9 @@ Add a groups table.
     Create a FAQ page that only users in the customers table can see.
     Add tests for all this new functionality
     Add API routes for any new features involving users and groups.
+Move test passwords to .env for security
+Implement argon2 password hashing
+Add a table for table metadata called table_metadata which contains metadata on any of the tables. Metadata is things like the groups who can read and the groups that can write to the table.
+Add a table for field metadata called field_metadata which will contain metadata on any of the fields in any of the tables. Metadata is things like what db type the field is, what html form element type to use when editing the field, a position within the form, and another position for the field when showing a tabular listing of the rows for the table, and a label for the field when in an html edit form.
+Add a page for viewing the rows from a database table in am html table with edit view and delete buttons. 
+Add a page for editing or viewing a row in any of the tables either in "engineer" mode showing everything in actual field name labels(without regard to metadata) or in normal mode with nice labels and obeying the metadata.

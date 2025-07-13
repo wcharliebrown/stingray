@@ -11,8 +11,8 @@ Stingray is a simple, fun web API written in Go. It is designed to be open sourc
         <td><img src="Gauge_in_red.png" alt="Pages per second" width="200"/></td>
     </tr>
     <tr>
-    <td><s>Dependencies!</s></td>
-    <td>2461 Lines of Code</td>
+    <td>Only 1 Dependency</td>
+    <td>4550 Lines of Code</td>
     <td>5000 Pages/sec</td>
     </tr>
 </table>
@@ -35,6 +35,7 @@ Stingray is a simple, fun web API written in Go. It is designed to be open sourc
 - ⚙️ **Configuration**: Environment-based configuration management.
 - 🧪 **Testing**: Comprehensive test suite included.
 - 🔐 **Secure Password Hashing**: Argon2id password hashing with automatic migration.
+- 📝 **Configurable Forms**: Dynamic form generation with field metadata and engineer mode.
 
 ## Current Status
 
@@ -133,6 +134,14 @@ Visit `http://localhost:6273` to access the web interface. The system includes:
 - `GET /api/user-groups?user_id={id}` - Get user groups (admin only)
 - `GET /api/current-user` - Get current user info (requires auth)
 
+#### Engineer-mode Database Management
+- `GET /metadata/tables` - List all database tables (requires auth)
+- `GET /metadata/table/{table}` - View table data with pagination (requires auth)
+- `GET /metadata/edit/{table}/{id}` - Edit table row (requires auth)
+- `GET /metadata/edit/{table}/new` - Create new table row (requires auth)
+- `POST /metadata/edit/{table}/{id}` - Update table row (requires auth)
+- `GET /metadata/delete/{table}/{id}` - Delete table row (requires auth)
+
 #### Role-Based Access
 - `GET /page/orders` - Orders management (admin only)
 - `GET /page/faq` - FAQ page (customer only)
@@ -160,6 +169,22 @@ The system includes a complete user management system:
 - **User Groups**: Role-based access control with groups
 - **Default Users**: Pre-configured admin and customer accounts
 
+### Configurable Forms System
+
+The system provides a powerful metadata-driven form generation system:
+
+- **Field Metadata**: Each database field has configurable metadata including:
+  - Display name and description
+  - HTML input type (text, email, password, textarea, select)
+  - Form position and list position
+  - Required/read-only flags
+  - Default values and validation rules
+- **Dynamic Form Generation**: Forms are automatically generated based on field metadata
+- **Engineer Mode**: Toggle between user-friendly labels and technical field names
+- **Role-Based Permissions**: Granular access control for table operations
+- **CRUD Operations**: Create, read, update, and delete operations for any table
+- **Pagination**: Built-in pagination for large datasets
+- **JSON API**: All form operations available via JSON API endpoints
 
 ### Database Features
 
@@ -167,6 +192,9 @@ The system includes a complete user management system:
 - **Session Cleanup**: Automatic cleanup of expired sessions
 - **User Management**: Complete user and group management
 - **Page Storage**: Dynamic page content storage and retrieval
+- **Metadata-Driven Forms**: Configurable form generation based on field metadata
+- **Role-Based Access Control**: Granular permissions for table read/write operations
+- **Engineer Mode**: Technical view with raw field names and database types
 
 ## Development
 
