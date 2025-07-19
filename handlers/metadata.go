@@ -574,10 +574,40 @@ func (h *MetadataHandler) HandleEditRow(w http.ResponseWriter, r *http.Request) 
 		if rowID == "new" {
 			// Create new row
 			delete(data, "id")
-			if err := h.db.CreateTableRow(tableName, data); err != nil {
-				database.LogSQLError(err)
-				http.Error(w, "Error creating row", http.StatusInternalServerError)
-				return
+			
+			// Special handling for field metadata table - use CreateFieldMetadata for schema synchronization
+			if tableName == "_field_metadata" {
+				// Convert form data to FieldMetadata struct
+				formPosition, _ := strconv.Atoi(data["form_position"].(string))
+				listPosition, _ := strconv.Atoi(data["list_position"].(string))
+				
+				fieldMetadata := &models.FieldMetadata{
+					TableName:       data["table_name"].(string),
+					FieldName:       data["field_name"].(string),
+					DisplayName:     data["display_name"].(string),
+					Description:     data["description"].(string),
+					DBType:          data["db_type"].(string),
+					HTMLInputType:   data["html_input_type"].(string),
+					FormPosition:    formPosition,
+					ListPosition:    listPosition,
+					IsRequired:      data["is_required"] == "1" || data["is_required"] == "true",
+					IsReadOnly:      data["is_read_only"] == "1" || data["is_read_only"] == "true",
+					DefaultValue:    data["default_value"].(string),
+					ValidationRules: data["validation_rules"].(string),
+				}
+				
+				if err := h.db.CreateFieldMetadata(fieldMetadata); err != nil {
+					database.LogSQLError(err)
+					http.Error(w, "Error creating field metadata", http.StatusInternalServerError)
+					return
+				}
+			} else {
+				// Use regular CreateTableRow for other tables
+				if err := h.db.CreateTableRow(tableName, data); err != nil {
+					database.LogSQLError(err)
+					http.Error(w, "Error creating row", http.StatusInternalServerError)
+					return
+				}
 			}
 		} else {
 			// Update existing row
@@ -586,10 +616,40 @@ func (h *MetadataHandler) HandleEditRow(w http.ResponseWriter, r *http.Request) 
 				http.Error(w, "Invalid row ID", http.StatusBadRequest)
 				return
 			}
-			if err := h.db.UpdateTableRow(tableName, id, data); err != nil {
-				database.LogSQLError(err)
-				http.Error(w, "Error updating row", http.StatusInternalServerError)
-				return
+			
+			// Special handling for field metadata table - use UpdateFieldMetadata for schema synchronization
+			if tableName == "_field_metadata" {
+				// Convert form data to FieldMetadata struct
+				formPosition, _ := strconv.Atoi(data["form_position"].(string))
+				listPosition, _ := strconv.Atoi(data["list_position"].(string))
+				
+				fieldMetadata := &models.FieldMetadata{
+					TableName:       data["table_name"].(string),
+					FieldName:       data["field_name"].(string),
+					DisplayName:     data["display_name"].(string),
+					Description:     data["description"].(string),
+					DBType:          data["db_type"].(string),
+					HTMLInputType:   data["html_input_type"].(string),
+					FormPosition:    formPosition,
+					ListPosition:    listPosition,
+					IsRequired:      data["is_required"] == "1" || data["is_required"] == "true",
+					IsReadOnly:      data["is_read_only"] == "1" || data["is_read_only"] == "true",
+					DefaultValue:    data["default_value"].(string),
+					ValidationRules: data["validation_rules"].(string),
+				}
+				
+				if err := h.db.UpdateFieldMetadata(fieldMetadata); err != nil {
+					database.LogSQLError(err)
+					http.Error(w, "Error updating field metadata", http.StatusInternalServerError)
+					return
+				}
+			} else {
+				// Use regular UpdateTableRow for other tables
+				if err := h.db.UpdateTableRow(tableName, id, data); err != nil {
+					database.LogSQLError(err)
+					http.Error(w, "Error updating row", http.StatusInternalServerError)
+					return
+				}
 			}
 		}
 
@@ -1392,4 +1452,125 @@ func (h *MetadataHandler) HandleCreateTable(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	t.Execute(w, nil)
+} 
+
+// HandleFieldMetadata handles all field metadata operations via API
+func (h *MetadataHandler) HandleFieldMetadata(w http.ResponseWriter, r *http.Request) {
+	// Check if user is authenticated
+	if !h.sm.IsAuthenticated(r) {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
+	}
+
+	// Check if user has admin or engineer permissions
+	session, err := h.sm.GetSessionFromRequest(r)
+	if err != nil {
+		http.Error(w, "User not authenticated", http.StatusUnauthorized)
+		return
+	}
+	userID := session.UserID
+
+	isAdmin, _ := h.db.IsUserInGroup(userID, "admin")
+	isEngineer, _ := h.db.IsUserInGroup(userID, "engineer")
+
+	if !isAdmin && !isEngineer {
+		http.Error(w, "Access denied", http.StatusForbidden)
+		return
+	}
+
+	// Route based on HTTP method and URL path
+	switch r.Method {
+	case "POST":
+		// Create new field metadata
+		var metadata models.FieldMetadata
+		if err := json.NewDecoder(r.Body).Decode(&metadata); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		// Validate required fields
+		if metadata.TableName == "" || metadata.FieldName == "" {
+			http.Error(w, "Table name and field name are required", http.StatusBadRequest)
+			return
+		}
+
+		// Create the field metadata (this will also update the database schema)
+		if err := h.db.CreateFieldMetadata(&metadata); err != nil {
+			database.LogSQLError(err)
+			http.Error(w, "Error creating field metadata", http.StatusInternalServerError)
+			return
+		}
+
+		// Return success response
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Field metadata created successfully",
+			"metadata": metadata,
+		})
+
+	case "PUT":
+		// Update existing field metadata
+		// Extract table name and field name from URL
+		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/metadata/field/"), "/")
+		if len(pathParts) < 2 {
+			http.Error(w, "Table name and field name required", http.StatusBadRequest)
+			return
+		}
+		tableName := pathParts[0]
+		fieldName := pathParts[1]
+
+		var metadata models.FieldMetadata
+		if err := json.NewDecoder(r.Body).Decode(&metadata); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		// Set the table name and field name from URL
+		metadata.TableName = tableName
+		metadata.FieldName = fieldName
+
+		// Update the field metadata (this will also update the database schema)
+		if err := h.db.UpdateFieldMetadata(&metadata); err != nil {
+			database.LogSQLError(err)
+			http.Error(w, "Error updating field metadata", http.StatusInternalServerError)
+			return
+		}
+
+		// Return success response
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Field metadata updated successfully",
+			"metadata": metadata,
+		})
+
+	case "DELETE":
+		// Delete field metadata
+		// Extract table name and field name from URL
+		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/metadata/field/"), "/")
+		if len(pathParts) < 2 {
+			http.Error(w, "Table name and field name required", http.StatusBadRequest)
+			return
+		}
+		tableName := pathParts[0]
+		fieldName := pathParts[1]
+
+		// Delete the field metadata (this will also remove the field from the database)
+		if err := h.db.DeleteFieldMetadata(tableName, fieldName); err != nil {
+			database.LogSQLError(err)
+			http.Error(w, "Error deleting field metadata", http.StatusInternalServerError)
+			return
+		}
+
+		// Return success response
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "Field metadata deleted successfully",
+			"table_name": tableName,
+			"field_name": fieldName,
+		})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 } 

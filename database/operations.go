@@ -1077,7 +1077,49 @@ func (d *Database) GetFieldMetadataByField(tableName, fieldName string) (*models
 
 // CreateFieldMetadata creates new field metadata
 func (d *Database) CreateFieldMetadata(metadata *models.FieldMetadata) error {
-	_, err := d.Exec(`
+	// Start a transaction
+	tx, err := d.Begin()
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	defer tx.Rollback()
+
+	// Check if field already exists in the database
+	exists, err := d.fieldExists(metadata.TableName, metadata.FieldName)
+	if err != nil {
+		return err
+	}
+
+	// If field doesn't exist in the database, add it
+	if !exists {
+		// Skip management fields that are handled separately
+		if metadata.FieldName != "id" && metadata.FieldName != "created" && metadata.FieldName != "modified" && 
+		   metadata.FieldName != "read_groups" && metadata.FieldName != "write_groups" {
+			
+			// Add the field to the actual table
+			alterSQL := "ALTER TABLE `" + metadata.TableName + "` ADD COLUMN `" + metadata.FieldName + "` " + metadata.DBType
+			
+			if metadata.IsRequired {
+				alterSQL += " NOT NULL"
+			} else {
+				alterSQL += " NULL"
+			}
+			
+			if metadata.DefaultValue != "" {
+				alterSQL += " DEFAULT '" + metadata.DefaultValue + "'"
+			}
+			
+			_, err = tx.Exec(alterSQL)
+			if err != nil {
+				LogSQLError(err)
+				return err
+			}
+		}
+	}
+
+	// Insert the field metadata
+	_, err = tx.Exec(`
 		INSERT INTO _field_metadata (table_name, field_name, display_name, description, db_type, html_input_type,
 		                           form_position, list_position, is_required, is_read_only, default_value, validation_rules)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1088,12 +1130,102 @@ func (d *Database) CreateFieldMetadata(metadata *models.FieldMetadata) error {
 		LogSQLError(err)
 		return err
 	}
-	return nil
+
+	// Commit the transaction
+	return tx.Commit()
 }
 
 // UpdateFieldMetadata updates existing field metadata
 func (d *Database) UpdateFieldMetadata(metadata *models.FieldMetadata) error {
-	_, err := d.Exec(`
+	// Start a transaction
+	tx, err := d.Begin()
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	defer tx.Rollback()
+
+	// Get the current field metadata to compare changes
+	var currentMetadata models.FieldMetadata
+	err = tx.QueryRow(`
+		SELECT table_name, field_name, display_name, description, db_type, html_input_type,
+		       form_position, list_position, is_required, is_read_only, default_value, validation_rules
+		FROM _field_metadata 
+		WHERE table_name = ? AND field_name = ?`,
+		metadata.TableName, metadata.FieldName).Scan(
+		&currentMetadata.TableName, &currentMetadata.FieldName, &currentMetadata.DisplayName, &currentMetadata.Description,
+		&currentMetadata.DBType, &currentMetadata.HTMLInputType, &currentMetadata.FormPosition, &currentMetadata.ListPosition,
+		&currentMetadata.IsRequired, &currentMetadata.IsReadOnly, &currentMetadata.DefaultValue, &currentMetadata.ValidationRules)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Check if DBType has changed and update the database schema if needed
+	if currentMetadata.DBType != metadata.DBType || currentMetadata.IsRequired != metadata.IsRequired || 
+	   currentMetadata.DefaultValue != metadata.DefaultValue {
+		
+		// Skip management fields that shouldn't be modified
+		if metadata.FieldName != "id" && metadata.FieldName != "created" && metadata.FieldName != "modified" && 
+		   metadata.FieldName != "read_groups" && metadata.FieldName != "write_groups" {
+			
+			// Check if this field has indexes that need to be handled
+			indexes, err := d.getFieldIndexes(metadata.TableName, metadata.FieldName)
+			if err != nil {
+				LogSQLError(err)
+				return err
+			}
+			
+			// Drop indexes if they exist and we're changing to TEXT/BLOB type
+			if len(indexes) > 0 && (strings.Contains(strings.ToUpper(metadata.DBType), "TEXT") || 
+			   strings.Contains(strings.ToUpper(metadata.DBType), "BLOB")) {
+				for _, indexName := range indexes {
+					dropIndexSQL := "ALTER TABLE `" + metadata.TableName + "` DROP INDEX `" + indexName + "`"
+					_, err = tx.Exec(dropIndexSQL)
+					if err != nil {
+						LogSQLError(err)
+						return err
+					}
+				}
+			}
+			
+			// Update the field in the actual table
+			alterSQL := "ALTER TABLE `" + metadata.TableName + "` MODIFY COLUMN `" + metadata.FieldName + "` " + metadata.DBType
+			
+			if metadata.IsRequired {
+				alterSQL += " NOT NULL"
+			} else {
+				alterSQL += " NULL"
+			}
+			
+			if metadata.DefaultValue != "" {
+				alterSQL += " DEFAULT '" + metadata.DefaultValue + "'"
+			}
+			
+			_, err = tx.Exec(alterSQL)
+			if err != nil {
+				LogSQLError(err)
+				return err
+			}
+			
+			// Recreate indexes if they were dropped and we're not changing to TEXT/BLOB
+			if len(indexes) > 0 && !strings.Contains(strings.ToUpper(metadata.DBType), "TEXT") && 
+			   !strings.Contains(strings.ToUpper(metadata.DBType), "BLOB") {
+				for _, indexName := range indexes {
+					// For now, recreate as simple index - in a production system you might want to preserve the exact index type
+					createIndexSQL := "ALTER TABLE `" + metadata.TableName + "` ADD INDEX `" + indexName + "` (`" + metadata.FieldName + "`)"
+					_, err = tx.Exec(createIndexSQL)
+					if err != nil {
+						LogSQLError(err)
+						return err
+					}
+				}
+			}
+		}
+	}
+
+	// Update the field metadata
+	_, err = tx.Exec(`
 		UPDATE _field_metadata 
 		SET display_name = ?, description = ?, db_type = ?, html_input_type = ?,
 		    form_position = ?, list_position = ?, is_required = ?, is_read_only = ?,
@@ -1106,7 +1238,9 @@ func (d *Database) UpdateFieldMetadata(metadata *models.FieldMetadata) error {
 		LogSQLError(err)
 		return err
 	}
-	return nil
+
+	// Commit the transaction
+	return tx.Commit()
 }
 
 // GetTableRows retrieves rows from a specific table with pagination
@@ -1267,9 +1401,19 @@ func (d *Database) UpdateTableRow(tableName string, id int, data map[string]inte
 	var values []interface{}
 
 	for col, val := range data {
+		// Skip empty values for timestamp fields to let MySQL handle defaults
+		if col == "created" || col == "modified" {
+			if val == "" || val == nil {
+				continue // Skip empty timestamp values
+			}
+		}
+		
 		setClauses = append(setClauses, "`"+col+"` = ?")
 		values = append(values, val)
 	}
+
+	// Always update the modified timestamp
+	setClauses = append(setClauses, "`modified` = CURRENT_TIMESTAMP")
 
 	values = append(values, id)
 	query := "UPDATE `" + tableName + "` SET " + strings.Join(setClauses, ", ") + " WHERE id = ?"
@@ -2820,12 +2964,44 @@ func (d *Database) DeleteTableMetadata(tableName string) error {
 
 // DeleteFieldMetadata deletes metadata for a specific field
 func (d *Database) DeleteFieldMetadata(tableName, fieldName string) error {
-	_, err := d.Exec("DELETE FROM _field_metadata WHERE table_name = ? AND field_name = ?", tableName, fieldName)
+	// Start a transaction
+	tx, err := d.Begin()
 	if err != nil {
 		LogSQLError(err)
 		return err
 	}
-	return nil
+	defer tx.Rollback()
+
+	// Skip management fields that shouldn't be deleted from the database
+	if fieldName != "id" && fieldName != "created" && fieldName != "modified" && 
+	   fieldName != "read_groups" && fieldName != "write_groups" {
+		
+		// Check if field exists in the database
+		exists, err := d.fieldExists(tableName, fieldName)
+		if err != nil {
+			return err
+		}
+
+		// If field exists in the database, remove it
+		if exists {
+			alterSQL := "ALTER TABLE `" + tableName + "` DROP COLUMN `" + fieldName + "`"
+			_, err = tx.Exec(alterSQL)
+			if err != nil {
+				LogSQLError(err)
+				return err
+			}
+		}
+	}
+
+	// Delete the field metadata
+	_, err = tx.Exec("DELETE FROM _field_metadata WHERE table_name = ? AND field_name = ?", tableName, fieldName)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Commit the transaction
+	return tx.Commit()
 }
 
 // CreateTableWithMetadata creates a new table with metadata and field metadata
@@ -3090,4 +3266,125 @@ func (d *Database) migrateUpdateDBTypes() error {
 	}
 
 	return nil
+}
+
+// getCurrentFieldType gets the current data type of a field in the database
+func (d *Database) getCurrentFieldType(tableName, fieldName string) (string, error) {
+	var dataType string
+	err := d.QueryRow(`
+		SELECT DATA_TYPE 
+		FROM INFORMATION_SCHEMA.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		AND TABLE_NAME = ? 
+		AND COLUMN_NAME = ?`,
+		tableName, fieldName).Scan(&dataType)
+	if err != nil {
+		LogSQLError(err)
+		return "", err
+	}
+	return dataType, nil
+}
+
+// fieldExists checks if a field exists in the specified table
+func (d *Database) fieldExists(tableName, fieldName string) (bool, error) {
+	var exists int
+	err := d.QueryRow(`
+		SELECT COUNT(*) 
+		FROM INFORMATION_SCHEMA.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		AND TABLE_NAME = ? 
+		AND COLUMN_NAME = ?`,
+		tableName, fieldName).Scan(&exists)
+	if err != nil {
+		LogSQLError(err)
+		return false, err
+	}
+	return exists > 0, nil
+}
+
+// alterTableField modifies a field in the database table
+func (d *Database) alterTableField(tableName, fieldName, newDBType string, isRequired bool, defaultValue string) error {
+	// Build ALTER TABLE statement
+	alterSQL := "ALTER TABLE `" + tableName + "` MODIFY COLUMN `" + fieldName + "` " + newDBType
+	
+	if isRequired {
+		alterSQL += " NOT NULL"
+	} else {
+		alterSQL += " NULL"
+	}
+	
+	if defaultValue != "" {
+		alterSQL += " DEFAULT '" + defaultValue + "'"
+	}
+	
+	_, err := d.Exec(alterSQL)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	return nil
+}
+
+// addTableField adds a new field to the database table
+func (d *Database) addTableField(tableName, fieldName, dbType string, isRequired bool, defaultValue string) error {
+	// Build ALTER TABLE statement
+	alterSQL := "ALTER TABLE `" + tableName + "` ADD COLUMN `" + fieldName + "` " + dbType
+	
+	if isRequired {
+		alterSQL += " NOT NULL"
+	} else {
+		alterSQL += " NULL"
+	}
+	
+	if defaultValue != "" {
+		alterSQL += " DEFAULT '" + defaultValue + "'"
+	}
+	
+	_, err := d.Exec(alterSQL)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	return nil
+}
+
+// dropTableField removes a field from the database table
+func (d *Database) dropTableField(tableName, fieldName string) error {
+	alterSQL := "ALTER TABLE `" + tableName + "` DROP COLUMN `" + fieldName + "`"
+	_, err := d.Exec(alterSQL)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+	return nil
+}
+
+// getFieldIndexes gets the names of indexes that include the specified field
+func (d *Database) getFieldIndexes(tableName, fieldName string) ([]string, error) {
+	rows, err := d.Query(`
+		SELECT DISTINCT INDEX_NAME 
+		FROM INFORMATION_SCHEMA.STATISTICS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		AND TABLE_NAME = ? 
+		AND COLUMN_NAME = ?
+		AND INDEX_NAME != 'PRIMARY'`,
+		tableName, fieldName)
+	if err != nil {
+		LogSQLError(err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var indexes []string
+	for rows.Next() {
+		var indexName string
+		err := rows.Scan(&indexName)
+		if err != nil {
+			LogSQLError(err)
+			return nil, err
+		}
+		indexes = append(indexes, indexName)
+	}
+
+	return indexes, nil
 }

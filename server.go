@@ -83,6 +83,10 @@ func NewServer(db *database.Database, cfg *config.Config) *Server {
 	mux.HandleFunc("/metadata/delete-table/", loggingMW.Wrap(sessionMW.RequireAuth(server.metadataHandler.HandleDeleteTable)))
 	mux.HandleFunc("/metadata/create-table", loggingMW.Wrap(sessionMW.RequireAuth(server.metadataHandler.HandleCreateTable)))
 
+	// Field metadata API routes
+	mux.HandleFunc("/api/metadata/field", loggingMW.Wrap(sessionMW.RequireAuth(server.metadataHandler.HandleFieldMetadata)))
+	mux.HandleFunc("/api/metadata/field/", loggingMW.Wrap(sessionMW.RequireAuth(server.metadataHandler.HandleFieldMetadata)))
+
 	server.server = &http.Server{
 		Addr:    ":" + cfg.ServerPort,
 		Handler: mux,
