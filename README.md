@@ -52,7 +52,7 @@ Stingray is a simple, fun web API written in Go. It is designed to be open sourc
 ### Build & Run
 
 ```bash
-git clone https://github.com/yourusername/stingray.git
+git clone https://github.com/wcharliebrown/stingray.git
 cd stingray
 go mod tidy
 go run .
