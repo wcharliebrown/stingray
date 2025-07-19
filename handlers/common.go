@@ -25,7 +25,7 @@ func RenderMessage(w http.ResponseWriter, title, header, headerClass, message, b
 		Message: message,
 		ButtonURL: buttonURL,
 		ButtonText: buttonText,
-		Footer: "© 2024 Sting Ray CMS",
+		Footer: "© 2025 StingRay",
 	}
 	tmplContent, err := templates.LoadTemplate("message")
 	if err != nil {

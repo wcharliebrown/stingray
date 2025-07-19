@@ -9,6 +9,7 @@ import (
 	"strings"
 	"stingray/database"
 	"stingray/models"
+	"stingray/templates"
 )
 
 // MetadataHandler handles metadata-related requests
@@ -108,43 +109,8 @@ func (h *MetadataHandler) HandleTableList(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// HTML response
-	tmpl := `
-	<!DOCTYPE html>
-	<html lang="en">
-	<head>
-		<meta charset="UTF-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>Database Tables - Sting Ray</title>
-		<style>
-			body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; margin: 0; padding: 2rem; }
-			.container { max-width: 1200px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-			h1 { color: #2c3e50; margin-bottom: 1rem; }
-			.toggle-container { margin-bottom: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; border: 1px solid #e9ecef; }
-			.toggle-label { font-weight: 600; margin-bottom: 0.5rem; display: block; }
-			.toggle-buttons { display: flex; gap: 0.5rem; }
-			.toggle-btn { padding: 0.5rem 1rem; border: 1px solid #dee2e6; background: white; color: #6c757d; text-decoration: none; border-radius: 4px; cursor: pointer; }
-			.toggle-btn.active { background: #667eea; color: white; border-color: #667eea; }
-			.toggle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-			.toggle-btn:not(:disabled):hover { background: #e9ecef; }
-			.toggle-btn.active:hover { background: #5a6fd8; }
-			.engineer-mode-notice { background: #fff3cd; border: 1px solid #ffeaa7; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; color: #856404; }
-			.table-list { list-style: none; padding: 0; }
-			.table-item { padding: 1rem; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center; }
-			.table-item:last-child { border-bottom: none; }
-			.table-info { flex: 1; }
-			.table-name { font-weight: 600; color: #667eea; margin-bottom: 0.25rem; }
-			.table-description { color: #6c757d; font-size: 0.9rem; }
-			.table-actions { display: flex; gap: 0.5rem; }
-			.btn { padding: 0.5rem 1rem; border: none; border-radius: 4px; text-decoration: none; font-size: 0.9rem; cursor: pointer; }
-			.btn-primary { background: #667eea; color: white; }
-			.btn-secondary { background: #6c757d; color: white; }
-			.btn:hover { opacity: 0.8; }
-		</style>
-	</head>
-	<body>
-		<div class="container">
-			<h1>Database Tables</h1>
+	// HTML response - use template system
+	mainContentTemplate := `<h1>Database Tables</h1>
 			
 			{{if .IsEngineer}}
 			<div class="toggle-container">
@@ -193,26 +159,56 @@ func (h *MetadataHandler) HandleTableList(w http.ResponseWriter, r *http.Request
 					</div>
 				</li>
 				{{end}}
-			</ul>
-		</div>
-	</body>
-	</html>`
+			</ul>`
 
-	t, err := template.New("tables").Parse(tmpl)
+	// Process the main content template
+	contentTmpl, err := template.New("content").Parse(mainContentTemplate)
 	if err != nil {
-		http.Error(w, "Error parsing template", http.StatusInternalServerError)
+		http.Error(w, "Error parsing content template", http.StatusInternalServerError)
 		return
 	}
 
-	data := map[string]interface{}{
+	var contentBuffer strings.Builder
+	contentData := map[string]interface{}{
 		"Tables":       accessibleTables,
 		"IsEngineer":   isEngineer,
 		"IsAdmin":      isAdmin,
 		"EngineerMode": engineerMode,
 	}
+	err = contentTmpl.Execute(&contentBuffer, contentData)
+	if err != nil {
+		http.Error(w, "Error executing content template", http.StatusInternalServerError)
+		return
+	}
+
+	mainContent := contentBuffer.String()
+
+	// Create template data
+	data := map[string]interface{}{
+		"Title":          "Database Tables - Sting Ray",
+		"MetaDescription": "View and manage database tables",
+		"Header":         "Database Tables",
+		"Navigation":     template.HTML(`<a href="/">Home</a> | <a href="/page/about">About</a> | <a href="/metadata/tables">Tables</a>`),
+		"MainContent":    template.HTML(mainContent),
+		"Sidebar":        "",
+		"Footer":         "© 2025 StingRay",
+		"CSSClass":       "metadata",
+		"Scripts":        "",
+		"Tables":         accessibleTables,
+		"IsEngineer":     isEngineer,
+		"IsAdmin":        isAdmin,
+		"EngineerMode":   engineerMode,
+	}
+
+	// Render using template system
+	html, err := templates.RenderMetadataPage(data)
+	if err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	t.Execute(w, data)
+	w.Write([]byte(html))
 }
 
 // HandleTableData handles viewing table data
@@ -372,7 +368,7 @@ func (h *MetadataHandler) HandleTableData(w http.ResponseWriter, r *http.Request
 		<title>{{.DisplayName}} - Sting Ray</title>
 		<style>
 			body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; margin: 0; padding: 2rem; }
-			.container { max-width: 1400px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+			.container { max-width: 100%; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
 			h1 { color: #2c3e50; margin-bottom: 1rem; }
 			.table-actions { margin-bottom: 1rem; }
 			.btn { padding: 0.5rem 1rem; border: none; border-radius: 4px; text-decoration: none; font-size: 0.9rem; cursor: pointer; margin-right: 0.5rem; }

@@ -186,7 +186,7 @@ func (h *PageHandler) HandlePages(w http.ResponseWriter, r *http.Request) {
 		<title>All Pages - Sting Ray</title>
 		<style>
 			body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; margin: 0; padding: 2rem; }
-			.container { max-width: 800px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+			.container { max-width: 100%; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
 			h1 { color: #2c3e50; margin-bottom: 1rem; }
 			.page-list { list-style: none; padding: 0; }
 			.page-item { padding: 1rem; border-bottom: 1px solid #e9ecef; }
@@ -242,7 +242,7 @@ func (h *PageHandler) HandleTemplates(w http.ResponseWriter, r *http.Request) {
 		<title>Available Templates - Sting Ray</title>
 		<style>
 			body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; margin: 0; padding: 2rem; }
-			.container { max-width: 800px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+			.container { max-width: 100%; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
 			h1 { color: #2c3e50; margin-bottom: 1rem; }
 			.template-list { list-style: none; padding: 0; }
 			.template-item { padding: 1rem; border-bottom: 1px solid #e9ecef; }

@@ -11,12 +11,13 @@ import (
 	"time"
 	"stingray/database"
 	"stingray/handlers"
+	"stingray/logging"
 )
 
 func setupTestDatabase(t *testing.T) *database.Database {
 	// Use a test database
 	dsn := "root:password@tcp(localhost:3306)/stingray_test?parseTime=true"
-	db, err := database.NewDatabase(dsn)
+	db, err := database.NewDatabase(dsn, false)
 	if err != nil {
 		t.Fatalf("Failed to connect to test database: %v", err)
 	}
@@ -198,7 +199,8 @@ func TestLoginHandler(t *testing.T) {
 	defer cleanupTestDatabase(t, db)
 	defer db.Close()
 
-	authHandler := handlers.NewAuthHandler(db)
+	logger := logging.NewLogger(logging.LevelVerbose)
+	authHandler := handlers.NewAuthHandler(db, logger)
 
 	// Get admin password from environment
 	adminPassword := os.Getenv("TEST_ADMIN_PASSWORD")

@@ -70,7 +70,7 @@ func (h *AuthHandler) HandleLoginPost(w http.ResponseWriter, r *http.Request) {
 		ButtonText  string
 		Footer      string
 	}
-	data.Footer = "© 2024 Sting Ray CMS"
+	data.Footer = "© 2025 StingRay"
 
 	// Get remote address for logging
 	remoteAddr := r.RemoteAddr
@@ -186,7 +186,7 @@ func (h *AuthHandler) HandleProfile(w http.ResponseWriter, r *http.Request) {
 	data.Message = "Welcome to your profile page!"
 	data.ButtonURL = "/"
 	data.ButtonText = "Go Home"
-	data.Footer = "© 2024 Sting Ray CMS"
+	data.Footer = "© 2025 StingRay"
 	data.Username = session.Username
 	data.UserID = session.UserID
 	data.LoginTime = session.CreatedAt.Format("2006-01-02 15:04:05")

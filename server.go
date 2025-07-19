@@ -44,7 +44,7 @@ func NewServer(db *database.Database, cfg *config.Config) *Server {
 		loggingMW:   loggingMW,
 		apiHandler:  apiHandler,
 		metadataHandler: handlers.NewMetadataHandler(db),
-		passwordResetHandler: handlers.NewPasswordResetHandler(db, cfg),
+		passwordResetHandler: handlers.NewPasswordResetHandler(db, cfg, logger),
 	}
 
 	// Page routes with optional auth middleware

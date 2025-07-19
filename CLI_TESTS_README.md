@@ -84,7 +84,7 @@ curl -w "Status: %{http_code}, Time: %{time_total}s\n" -o /dev/null http://local
     "navigation": "<ul><li><a href=\"/\">Home</a></li><li><a href=\"/page/about\">About</a></li><li><a href=\"/user/login\">Login</a></li></ul>",
     "main_content": "<p>Sting Ray is a modern web application built with Go...</p>",
     "sidebar": "<div class='sidebar'><h3>Contact</h3><p>Get in touch with us for more information.</p></div>",
-    "footer": "<footer>&copy; 2024 Sting Ray. All rights reserved.</footer>",
+    "footer": "<footer>&copy; 2025 StingRay. All rights reserved.</footer>",
     "css_class": "about-page",
     "scripts": "<script>console.log('About page loaded');</script>",
     "template": "default"

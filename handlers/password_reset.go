@@ -8,33 +8,40 @@ import (
 	"stingray/config"
 	"stingray/database"
 	"stingray/email"
+	"stingray/logging"
 	"stingray/templates"
 	"time"
 )
 
 // PasswordResetHandler handles password reset functionality
 type PasswordResetHandler struct {
-	db    *database.Database
-	cfg   *config.Config
-	email *email.EmailService
+	db     *database.Database
+	cfg    *config.Config
+	email  *email.EmailService
+	logger *logging.Logger
 }
 
 // NewPasswordResetHandler creates a new password reset handler
-func NewPasswordResetHandler(db *database.Database, cfg *config.Config) *PasswordResetHandler {
+func NewPasswordResetHandler(db *database.Database, cfg *config.Config, logger *logging.Logger) *PasswordResetHandler {
 	emailService, err := email.NewEmailService(
 		cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword,
 		cfg.FromEmail, cfg.FromName, cfg.DKIMPrivateKeyFile, cfg.DKIMSelector, cfg.DKIMDomain,
 	)
 	if err != nil {
 		// Log error but continue without email service
-		fmt.Printf("Warning: Failed to initialize email service: %v\n", err)
+		if logger != nil {
+			logger.LogError("Failed to initialize email service: %v", err)
+		} else {
+			fmt.Printf("Warning: Failed to initialize email service: %v\n", err)
+		}
 		emailService = nil
 	}
 
 	return &PasswordResetHandler{
-		db:    db,
-		cfg:   cfg,
-		email: emailService,
+		db:     db,
+		cfg:    cfg,
+		email:  emailService,
+		logger: logger,
 	}
 }
 

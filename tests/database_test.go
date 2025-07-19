@@ -9,7 +9,7 @@ import (
 
 func TestDatabaseConnection(t *testing.T) {
 	cfg := config.LoadConfig()
-	db, err := database.NewDatabase(cfg.GetDSN())
+	db, err := database.NewDatabase(cfg.GetDSN(), false)
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -18,7 +18,7 @@ func TestDatabaseConnection(t *testing.T) {
 
 func TestGetPage(t *testing.T) {
 	cfg := config.LoadConfig()
-	db, err := database.NewDatabase(cfg.GetDSN())
+	db, err := database.NewDatabase(cfg.GetDSN(), false)
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
 	}
