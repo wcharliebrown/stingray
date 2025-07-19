@@ -33,6 +33,8 @@ type Config struct {
 	DKIMPrivateKeyFile string
 	DKIMSelector       string
 	DKIMDomain         string
+	// Server configuration
+	ServerPort string
 }
 
 func LoadConfig() *Config {
@@ -64,6 +66,8 @@ func LoadConfig() *Config {
 		DKIMPrivateKeyFile: getEnv("DKIM_PRIVATE_KEY_FILE", ".DKIM_KEY.txt"),
 		DKIMSelector:       getEnv("DKIM_SELECTOR", "default"),
 		DKIMDomain:         getEnv("DKIM_DOMAIN", "yourdomain.com"),
+		// Server configuration
+		ServerPort: getEnv("SERVER_PORT", "8080"),
 	}
 }
 

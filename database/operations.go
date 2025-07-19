@@ -246,6 +246,12 @@ func (d *Database) initDatabase() error {
 		return err
 	}
 
+	// Migrate existing db_type values to include proper length specifications
+	if err := d.migrateUpdateDBTypes(); err != nil {
+		LogSQLError(err)
+		return err
+	}
+
 	return nil
 }
 
@@ -1343,7 +1349,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "username",
 			DisplayName:   "Username",
 			Description:   "User login name",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(255)",
 			HTMLInputType: "text",
 			FormPosition:  1,
 			ListPosition:  1,
@@ -1355,7 +1361,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "email",
 			DisplayName:   "Email",
 			Description:   "User email address",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(255)",
 			HTMLInputType: "email",
 			FormPosition:  2,
 			ListPosition:  2,
@@ -1367,7 +1373,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "password",
 			DisplayName:   "Password",
 			Description:   "Hashed password",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(255)",
 			HTMLInputType: "password",
 			FormPosition:  3,
 			ListPosition:  -1, // Don't show in list
@@ -1464,7 +1470,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "slug",
 			DisplayName:   "Slug",
 			Description:   "URL-friendly identifier",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(255)",
 			HTMLInputType: "text",
 			FormPosition:  1,
 			ListPosition:  1,
@@ -1476,7 +1482,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "title",
 			DisplayName:   "Title",
 			Description:   "Page title",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(255)",
 			HTMLInputType: "text",
 			FormPosition:  2,
 			ListPosition:  2,
@@ -1560,7 +1566,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "css_class",
 			DisplayName:   "CSS Class",
 			Description:   "CSS class for styling",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(255)",
 			HTMLInputType: "text",
 			FormPosition:  9,
 			ListPosition:  3,
@@ -1584,7 +1590,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "template",
 			DisplayName:   "Template",
 			Description:   "Template name",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(255)",
 			HTMLInputType: "text",
 			FormPosition:  11,
 			ListPosition:  4,
@@ -1681,7 +1687,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "name",
 			DisplayName:   "Name",
 			Description:   "Group name",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(255)",
 			HTMLInputType: "text",
 			FormPosition:  1,
 			ListPosition:  1,
@@ -1911,7 +1917,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "session_id",
 			DisplayName:   "Session ID",
 			Description:   "Session identifier",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(255)",
 			HTMLInputType: "text",
 			FormPosition:  1,
 			ListPosition:  1,
@@ -1935,7 +1941,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "username",
 			DisplayName:   "Username",
 			Description:   "Username",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(255)",
 			HTMLInputType: "text",
 			FormPosition:  3,
 			ListPosition:  3,
@@ -2032,7 +2038,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "table_name",
 			DisplayName:   "Table Name",
 			Description:   "Database table name",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(255)",
 			HTMLInputType: "text",
 			FormPosition:  1,
 			ListPosition:  1,
@@ -2044,7 +2050,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "display_name",
 			DisplayName:   "Display Name",
 			Description:   "Human-readable table name",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(255)",
 			HTMLInputType: "text",
 			FormPosition:  2,
 			ListPosition:  2,
@@ -2153,7 +2159,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "table_name",
 			DisplayName:   "Table Name",
 			Description:   "Database table name",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(255)",
 			HTMLInputType: "text",
 			FormPosition:  1,
 			ListPosition:  1,
@@ -2165,7 +2171,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "field_name",
 			DisplayName:   "Field Name",
 			Description:   "Database field name",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(255)",
 			HTMLInputType: "text",
 			FormPosition:  2,
 			ListPosition:  2,
@@ -2177,7 +2183,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "display_name",
 			DisplayName:   "Display Name",
 			Description:   "Human-readable field name",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(255)",
 			HTMLInputType: "text",
 			FormPosition:  3,
 			ListPosition:  3,
@@ -2201,7 +2207,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "db_type",
 			DisplayName:   "DB Type",
 			Description:   "Database field type",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(100)",
 			HTMLInputType: "text",
 			FormPosition:  5,
 			ListPosition:  5,
@@ -2213,7 +2219,7 @@ func (d *Database) initializeMetadata() error {
 			FieldName:     "html_input_type",
 			DisplayName:   "HTML Input Type",
 			Description:   "HTML input type for forms",
-			DBType:        "VARCHAR",
+			DBType:        "VARCHAR(100)",
 			HTMLInputType: "text",
 			FormPosition:  6,
 			ListPosition:  6,
@@ -3049,4 +3055,39 @@ func (d *Database) GetUserByEmail(email string) (*models.User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+// migrateUpdateDBTypes updates existing db_type values to include proper length specifications
+func (d *Database) migrateUpdateDBTypes() error {
+	// Update VARCHAR fields to include length specification
+	_, err := d.Exec(`
+		UPDATE _field_metadata 
+		SET db_type = 'VARCHAR(255)' 
+		WHERE db_type = 'VARCHAR'`)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Update INT fields to include length specification (optional, but consistent)
+	_, err = d.Exec(`
+		UPDATE _field_metadata 
+		SET db_type = 'INT' 
+		WHERE db_type = 'INT'`)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	// Update DECIMAL fields to include precision and scale
+	_, err = d.Exec(`
+		UPDATE _field_metadata 
+		SET db_type = 'DECIMAL(10,2)' 
+		WHERE db_type = 'DECIMAL'`)
+	if err != nil {
+		LogSQLError(err)
+		return err
+	}
+
+	return nil
 }

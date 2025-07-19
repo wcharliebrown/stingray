@@ -84,7 +84,7 @@ func NewServer(db *database.Database, cfg *config.Config) *Server {
 	mux.HandleFunc("/metadata/create-table", loggingMW.Wrap(sessionMW.RequireAuth(server.metadataHandler.HandleCreateTable)))
 
 	server.server = &http.Server{
-		Addr:    ":6273",
+		Addr:    ":" + cfg.ServerPort,
 		Handler: mux,
 	}
 
@@ -92,8 +92,8 @@ func NewServer(db *database.Database, cfg *config.Config) *Server {
 }
 
 func (s *Server) Start() error {
-	s.logger.LogVerbose("Starting Sting Ray server on port 6273...")
-	log.Printf("Starting Sting Ray server on port 6273...")
+	s.logger.LogVerbose("Starting Sting Ray server on port " + s.cfg.ServerPort + "...")
+	log.Printf("Starting Sting Ray server on port %s...", s.cfg.ServerPort)
 	return s.server.ListenAndServe()
 }
 
