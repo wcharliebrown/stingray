@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"strconv"
+	"log"
 )
 
 type Config struct {
@@ -40,7 +41,9 @@ type Config struct {
 func LoadConfig() *Config {
 	// Load .env file if it exists
 	loadEnvFile(".env")
-	
+
+	log.Printf("[DEBUG] LoadConfig: os.Getenv(LOGGING_LEVEL) = %s", os.Getenv("LOGGING_LEVEL"))
+
 	return &Config{
 		MySQLHost:     os.Getenv("MYSQL_HOST"),
 		MySQLPort:     os.Getenv("MYSQL_PORT"),
@@ -96,8 +99,9 @@ func loadEnvFile(filename string) {
 			// Save previous key-value pair if exists
 			if currentKey != "" {
 				value := strings.TrimSpace(currentValue.String())
-				if os.Getenv(currentKey) == "" {
-					os.Setenv(currentKey, value)
+				os.Setenv(currentKey, value)
+				if currentKey == "LOGGING_LEVEL" {
+					log.Printf("[DEBUG] loadEnvFile: Set LOGGING_LEVEL to %s", value)
 				}
 			}
 
@@ -118,8 +122,9 @@ func loadEnvFile(filename string) {
 	// Save the last key-value pair
 	if currentKey != "" {
 		value := strings.TrimSpace(currentValue.String())
-		if os.Getenv(currentKey) == "" {
-			os.Setenv(currentKey, value)
+		os.Setenv(currentKey, value)
+		if currentKey == "LOGGING_LEVEL" {
+			log.Printf("[DEBUG] loadEnvFile: Set LOGGING_LEVEL to %s", value)
 		}
 	}
 }

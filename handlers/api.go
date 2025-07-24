@@ -6,19 +6,22 @@ import (
 	"strconv"
 	"stingray/database"
 	"stingray/models"
+	"stingray/config"
 )
 
 // APIHandler handles API requests
 type APIHandler struct {
-	db *database.Database
-	rm *RoleMiddleware
+	db  *database.Database
+	rm  *RoleMiddleware
+	cfg *config.Config
 }
 
 // NewAPIHandler creates a new API handler
-func NewAPIHandler(db *database.Database) *APIHandler {
+func NewAPIHandler(db *database.Database, cfg *config.Config) *APIHandler {
 	return &APIHandler{
-		db: db,
-		rm: NewRoleMiddleware(db),
+		db:  db,
+		rm:  NewRoleMiddleware(db),
+		cfg: cfg,
 	}
 }
 
@@ -235,6 +238,34 @@ func (h *APIHandler) HandleGetCurrentUser(w http.ResponseWriter, r *http.Request
 		response := APIResponse{
 			Success: true,
 			Data:    userInfo,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	})(w, r)
+}
+
+// HandleReloadEnv reloads the .env file and updates the config
+func (h *APIHandler) HandleReloadEnv(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	h.rm.RequireAdmin(func(w http.ResponseWriter, r *http.Request) {
+		success, errMsg := ReloadEnvConfig(h.cfg)
+		if !success {
+			response := APIResponse{
+				Success: false,
+				Error:   errMsg,
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		response := APIResponse{
+			Success: true,
+			Message: ".env file reloaded successfully.",
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)

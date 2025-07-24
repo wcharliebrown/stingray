@@ -4,7 +4,18 @@ import (
 	"html/template"
 	"net/http"
 	"stingray/templates"
+	"stingray/config"
 )
+
+// ReloadEnvConfig reloads the .env file and updates the config pointer
+func ReloadEnvConfig(cfg *config.Config) (success bool, errMsg string) {
+	newCfg := config.LoadConfig()
+	if newCfg == nil {
+		return false, "Failed to reload .env file."
+	}
+	*cfg = *newCfg
+	return true, ""
+}
 
 // RenderMessage renders a message page with the given parameters
 func RenderMessage(w http.ResponseWriter, title, header, headerClass, message, buttonURL, buttonText string, status int) {

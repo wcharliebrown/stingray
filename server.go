@@ -31,13 +31,13 @@ func NewServer(db *database.Database, cfg *config.Config) *Server {
 	sessionMW := handlers.NewSessionMiddleware(db)
 	roleMW := handlers.NewRoleMiddleware(db)
 	loggingMW := handlers.NewLoggingMiddleware(logger)
-	apiHandler := handlers.NewAPIHandler(db)
+	apiHandler := handlers.NewAPIHandler(db, cfg)
 	
 	server := &Server{
 		db:          db,
 		cfg:         cfg,
 		logger:      logger,
-		pageHandler: handlers.NewPageHandler(db),
+		pageHandler: handlers.NewPageHandler(db, cfg), // Pass cfg
 		authHandler: handlers.NewAuthHandler(db, logger),
 		sessionMW:   sessionMW,
 		roleMW:      roleMW,
@@ -53,6 +53,31 @@ func NewServer(db *database.Database, cfg *config.Config) *Server {
 	mux.HandleFunc("/pages", loggingMW.Wrap(sessionMW.OptionalAuth(server.pageHandler.HandlePages)))
 	mux.HandleFunc("/templates", loggingMW.Wrap(sessionMW.OptionalAuth(server.pageHandler.HandleTemplate)))
 	mux.HandleFunc("/template/", loggingMW.Wrap(sessionMW.OptionalAuth(server.pageHandler.HandleTemplate)))
+
+	// Config settings page (admin or engineer only)
+	mux.HandleFunc("/config", loggingMW.Wrap(func(w http.ResponseWriter, r *http.Request) {
+		if !sessionMW.IsAuthenticated(r) {
+			http.Redirect(w, r, "/user/login", http.StatusSeeOther)
+			return
+		}
+		session, err := sessionMW.GetSessionFromRequest(r)
+		if err != nil {
+			http.Redirect(w, r, "/user/login", http.StatusSeeOther)
+			return
+		}
+		isAdmin, _ := db.IsUserInGroup(session.UserID, "admin")
+		isEngineer, _ := db.IsUserInGroup(session.UserID, "engineer")
+		if !isAdmin && !isEngineer {
+			handlers.RenderMessage(w, "Access Denied", "Access Denied", "error", "You do not have permission to access this page.", "/", "Go Home", http.StatusForbidden)
+			return
+		}
+		if r.Method == "POST" {
+			log.Printf("[DEBUG] HandleConfigPage POST called")
+			server.pageHandler.HandleConfigPage(w, r)
+		} else {
+			server.pageHandler.HandleConfigPage(w, r)
+		}
+	}))
 	
 	// Auth routes
 	mux.HandleFunc("/user/login", loggingMW.Wrap(server.authHandler.HandleLogin))
@@ -86,6 +111,9 @@ func NewServer(db *database.Database, cfg *config.Config) *Server {
 	// Field metadata API routes
 	mux.HandleFunc("/api/metadata/field", loggingMW.Wrap(sessionMW.RequireAuth(server.metadataHandler.HandleFieldMetadata)))
 	mux.HandleFunc("/api/metadata/field/", loggingMW.Wrap(sessionMW.RequireAuth(server.metadataHandler.HandleFieldMetadata)))
+
+	// Register the new /api/reload route
+	mux.HandleFunc("/api/reload", loggingMW.Wrap(sessionMW.RequireAuth(apiHandler.HandleReloadEnv)))
 
 	server.server = &http.Server{
 		Addr:    ":" + cfg.ServerPort,
